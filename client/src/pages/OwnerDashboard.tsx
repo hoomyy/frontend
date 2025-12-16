@@ -9,6 +9,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { queryClient } from '@/lib/queryClient';
 import type { StripeAccountStatus } from '@shared/schema';
 import { apiRequest } from '@/lib/api';
+import { safeRedirect } from '@/lib/security';
 import { useToast } from '@/hooks/use-toast';
 import { useLanguage } from '@/lib/useLanguage';
 
@@ -65,7 +66,7 @@ export default function OwnerDashboard() {
     mutationFn: () => apiRequest<{ success: boolean; url: string; requires_account_creation?: boolean }>('POST', '/contracts/connect/create-onboarding-link'),
     onSuccess: (data: { url: string }) => {
       if (data.url) {
-        window.location.href = data.url;
+        safeRedirect(data.url, '/dashboard/owner');
       } else {
         toast({
           title: 'Error',

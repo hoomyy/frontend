@@ -12,6 +12,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAuth } from '@/lib/auth';
+import { safeRedirect } from '@/lib/security';
 import { LanguageSelector } from '@/components/LanguageSelector';
 import { useLanguage } from '@/lib/useLanguage';
 import { normalizeImageUrl } from '@/lib/imageUtils';
@@ -63,7 +64,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
     mutationFn: () => apiRequest<{ success: boolean; url: string; requires_account_creation?: boolean }>('POST', '/contracts/connect/create-onboarding-link'),
     onSuccess: (data: { url: string }) => {
       if (data.url) {
-        window.location.href = data.url;
+        safeRedirect(data.url, '/');
       }
     },
     onError: (error: any) => {

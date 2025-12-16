@@ -18,6 +18,7 @@ import { getBackendBaseURL } from '@/lib/apiConfig';
 import { getAuthToken } from '@/lib/auth';
 import { useLanguage } from '@/lib/useLanguage';
 import { useToast } from '@/hooks/use-toast';
+import { escapeHtml, sanitizeUrl, isTrustedUrl, safeOpen } from '@/lib/security';
 
 export default function Messages() {
   const { user, isOwner } = useAuth();
@@ -212,11 +213,36 @@ export default function Messages() {
       return;
     }
 
-    // Vérifier le type
-    if (!file.type.startsWith('image/')) {
+    // Vérifier le type MIME strictement
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
       toast({
         title: 'Type de fichier invalide',
-        description: 'Veuillez sélectionner une image.',
+        description: 'Veuillez sélectionner une image (JPEG, PNG, GIF ou WebP).',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Vérifier l'extension du fichier
+    const fileName = file.name.toLowerCase();
+    const validExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+    const hasValidExtension = validExtensions.some(ext => fileName.endsWith(ext));
+    
+    if (!hasValidExtension) {
+      toast({
+        title: 'Extension invalide',
+        description: 'L\'extension du fichier n\'est pas autorisée.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Vérifier que le fichier n'est pas vide
+    if (file.size === 0) {
+      toast({
+        title: 'Fichier vide',
+        description: 'Le fichier sélectionné est vide.',
         variant: 'destructive',
       });
       return;
@@ -225,7 +251,24 @@ export default function Messages() {
     setSelectedImage(file);
     const reader = new FileReader();
     reader.onloadend = () => {
-      setImagePreview(reader.result as string);
+      const result = reader.result as string;
+      // Vérifier que le résultat est bien une data URL d'image
+      if (result && result.startsWith('data:image/')) {
+        setImagePreview(result);
+      } else {
+        toast({
+          title: 'Erreur de lecture',
+          description: 'Impossible de lire le fichier image.',
+          variant: 'destructive',
+        });
+      }
+    };
+    reader.onerror = () => {
+      toast({
+        title: 'Erreur de lecture',
+        description: 'Une erreur est survenue lors de la lecture du fichier.',
+        variant: 'destructive',
+      });
     };
     reader.readAsDataURL(file);
   };
@@ -280,15 +323,36 @@ export default function Messages() {
       setUploadingImage(false);
     }
 
+    // Valider l'URL de l'image si elle existe
+    let safeImageUrl: string | undefined = undefined;
+    if (imageUrl) {
+      const sanitized = sanitizeUrl(imageUrl);
+      if (sanitized && (isTrustedUrl(imageUrl) || imageUrl.startsWith('data:image/') || imageUrl.startsWith('blob:'))) {
+        safeImageUrl = sanitized;
+      } else {
+        toast({
+          title: 'URL invalide',
+          description: 'L\'URL de l\'image n\'est pas sécurisée.',
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
+    // Le backend va sanitizer le contenu, on envoie le texte brut
     sendMessageMutation.mutate({
       conversation_id: selectedConversation,
       content: messageText.trim() || undefined,
-      image_url: imageUrl,
+      image_url: safeImageUrl,
     });
   };
 
   const handleMessageTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const value = e.target.value;
+    let value = e.target.value;
+    
+    // Supprimer les caractères de contrôle dangereux
+    value = value.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+    
     if (value.length <= MESSAGE_MAX_LENGTH) {
       setMessageText(value);
     } else {
@@ -491,14 +555,14 @@ export default function Messages() {
                               </div>
                               <div className="flex-1 min-w-0 overflow-hidden">
                                 <h4 className="font-semibold truncate text-[11px] sm:text-xs md:text-sm">
-                                  {conv.property_title}
+                                  {escapeHtml(conv.property_title || '')}
                                 </h4>
                                 <p className="text-[9px] sm:text-[10px] md:text-xs text-muted-foreground truncate">
-                                  {conv.other_user_name}
+                                  {escapeHtml(conv.other_user_name || '')}
                                 </p>
                                 {conv.last_message && (
                                   <p className="text-[9px] sm:text-[10px] md:text-xs text-muted-foreground mt-0.5 sm:mt-1 break-all line-clamp-2 overflow-hidden" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
-                                    {conv.last_message}
+                                    {escapeHtml(conv.last_message)}
                                   </p>
                                 )}
                               </div>
@@ -630,19 +694,39 @@ export default function Messages() {
                                   <div
                                     className={isOwn ? 'max-w-[90%] xs:max-w-[85%] sm:max-w-[80%] md:max-w-[75%] lg:max-w-[70%] rounded-lg p-2 sm:p-2.5 md:p-3 bg-primary text-primary-foreground overflow-hidden min-w-0' : 'max-w-[90%] xs:max-w-[85%] sm:max-w-[80%] md:max-w-[75%] lg:max-w-[70%] rounded-lg p-2 sm:p-2.5 md:p-3 bg-muted overflow-hidden min-w-0'}
                                   >
-                                    {msg.image_url && (
-                                      <div className="mb-2 rounded-md overflow-hidden">
-                                        <img
-                                          src={msg.image_url}
-                                          alt="Image du message"
-                                          className="max-w-full h-auto max-h-[300px] object-contain cursor-pointer"
-                                          onClick={() => window.open(msg.image_url!, '_blank')}
-                                        />
-                                      </div>
-                                    )}
+                                    {msg.image_url && (() => {
+                                      // Valider et sécuriser l'URL de l'image
+                                      const sanitizedUrl = sanitizeUrl(msg.image_url);
+                                      const isTrusted = isTrustedUrl(msg.image_url) || msg.image_url.startsWith('data:image/') || msg.image_url.startsWith('blob:');
+                                      
+                                      if (!sanitizedUrl || !isTrusted) {
+                                        return null; // Ne pas afficher l'image si l'URL n'est pas sécurisée
+                                      }
+                                      
+                                      return (
+                                        <div className="mb-2 rounded-md overflow-hidden">
+                                          <img
+                                            src={sanitizedUrl}
+                                            alt="Image du message"
+                                            className="max-w-full h-auto max-h-[300px] object-contain cursor-pointer"
+                                            onClick={() => {
+                                              if (msg.image_url) {
+                                                safeOpen(msg.image_url);
+                                              }
+                                            }}
+                                            onError={(e) => {
+                                              // Cacher l'image en cas d'erreur de chargement
+                                              (e.target as HTMLImageElement).style.display = 'none';
+                                            }}
+                                            loading="lazy"
+                                            crossOrigin="anonymous"
+                                          />
+                                        </div>
+                                      );
+                                    })()}
                                     {msg.content && (
                                       <p className="text-[11px] sm:text-xs md:text-sm whitespace-pre-wrap break-all leading-relaxed" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere', maxWidth: '100%' }}>
-                                        {msg.content}
+                                        {escapeHtml(msg.content)}
                                       </p>
                                     )}
                                     <p

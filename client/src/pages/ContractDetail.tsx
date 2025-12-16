@@ -20,6 +20,7 @@ import { apiRequest } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { getAPIBaseURL } from '@/lib/apiConfig';
 import { ContractSignatureDialog } from '@/components/ContractSignatureDialog';
+import { safeRedirect } from '@/lib/security';
 
 export default function ContractDetail() {
   const params = useParams();
@@ -177,7 +178,7 @@ export default function ContractDetail() {
           title: 'Redirecting to Stripe', 
           description: 'You will be redirected to complete your payment setup.' 
         });
-        window.location.href = data.checkout_url;
+        safeRedirect(data.checkout_url, '/contracts');
       } else {
         toast({ 
           title: 'Error', 
@@ -231,7 +232,7 @@ export default function ContractDetail() {
           title: 'Redirecting to Stripe', 
           description: 'You will be redirected to complete your deposit payment.' 
         });
-        window.location.href = data.checkout_url;
+        safeRedirect(data.checkout_url, '/contracts');
       } else {
         toast({ 
           title: 'Error', 

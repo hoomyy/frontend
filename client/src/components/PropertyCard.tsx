@@ -8,6 +8,7 @@ import type { Property } from '@shared/schema';
 import { normalizeImageUrl } from '@/lib/imageUtils';
 import { usePrefetchProperty } from '@/hooks/use-prefetch';
 import { useLanguage } from '@/lib/useLanguage';
+import { escapeHtml } from '@/lib/security';
 
 interface PropertyCardProps {
   property: Property;
@@ -107,7 +108,7 @@ export const PropertyCard = memo(function PropertyCard({ property, onFavoriteTog
               <img
                 ref={imageRef}
                 src={imageError ? 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="300"%3E%3Crect fill="%23e5e7eb" width="400" height="300"/%3E%3Ctext fill="%239ca3af" x="50%25" y="50%25" text-anchor="middle" dy=".3em" font-family="system-ui" font-size="16"%3EImage non disponible%3C/text%3E%3C/svg%3E' : imageUrl}
-                alt={property.title}
+                alt={escapeHtml(property.title || 'Property')}
                 className={`w-full h-full object-cover transition-all duration-200 group-hover:scale-105 will-change-transform ${
                   imageLoaded ? 'opacity-100' : 'opacity-0'
                 }`}
@@ -147,11 +148,11 @@ export const PropertyCard = memo(function PropertyCard({ property, onFavoriteTog
           <div className="space-y-3 cursor-pointer">
             <div>
               <h3 className="font-semibold text-lg line-clamp-1" data-testid={`text-title-${property.id}`}>
-                {property.title}
+                {escapeHtml(property.title || '')}
               </h3>
               <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
                 <MapPin className="h-3 w-3" />
-                {property.address}
+                {escapeHtml(property.address || '')}
               </p>
             </div>
 

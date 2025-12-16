@@ -1,5 +1,6 @@
 import { useLocation } from 'wouter';
 import { useMemo, type ReactNode, type AnchorHTMLAttributes } from 'react';
+import { sanitizeUrl } from '@/lib/security';
 
 interface AbsoluteLinkProps extends Omit<AnchorHTMLAttributes<HTMLAnchorElement>, 'href'> {
   href: string;
@@ -16,15 +17,19 @@ export function AbsoluteLink({ href, children, onClick, ...props }: AbsoluteLink
   
   // Generate absolute URL for internal links
   const absoluteHref = useMemo(() => {
-    // If it's already an absolute URL (starts with http:// or https://), use it as-is
+    // If it's already an absolute URL (starts with http:// or https://), sanitize it
     if (href.startsWith('http://') || href.startsWith('https://')) {
-      return href;
+      const sanitized = sanitizeUrl(href);
+      return sanitized || '#';
     }
     
     // For relative paths, create absolute URL
     // Use window.location.origin to get the current domain
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    return `${origin}${href.startsWith('/') ? href : '/' + href}`;
+    const fullUrl = `${origin}${href.startsWith('/') ? href : '/' + href}`;
+    // Sanitize the full URL
+    const sanitized = sanitizeUrl(fullUrl);
+    return sanitized || '#';
   }, [href]);
 
   const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {

@@ -137,6 +137,8 @@ export function isTrustedUrl(url: string): boolean {
     'fonts.googleapis.com',
     'fonts.gstatic.com',
     'images.unsplash.com',
+    'js.stripe.com',
+    'hooks.stripe.com',
   ];
   
   try {
@@ -146,6 +148,31 @@ export function isTrustedUrl(url: string): boolean {
     );
   } catch {
     return false;
+  }
+}
+
+/**
+ * Safely redirect to a URL after validation
+ */
+export function safeRedirect(url: string, fallback: string = '/'): void {
+  const sanitized = sanitizeUrl(url);
+  if (sanitized && (isTrustedUrl(url) || url.startsWith('/'))) {
+    window.location.href = sanitized;
+  } else {
+    reportSecurityViolation('unsafe_redirect', { url, sanitized });
+    window.location.href = fallback;
+  }
+}
+
+/**
+ * Safely open a URL in a new window/tab
+ */
+export function safeOpen(url: string): void {
+  const sanitized = sanitizeUrl(url);
+  if (sanitized && (isTrustedUrl(url) || url.startsWith('/'))) {
+    window.open(sanitized, '_blank', 'noopener,noreferrer');
+  } else {
+    reportSecurityViolation('unsafe_open', { url, sanitized });
   }
 }
 

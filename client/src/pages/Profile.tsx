@@ -17,6 +17,7 @@ import { queryClient } from '@/lib/queryClient';
 import { apiRequest, uploadImage } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { useLanguage } from '@/lib/useLanguage';
+import { safeRedirect } from '@/lib/security';
 import { normalizeImageUrl } from '@/lib/imageUtils';
 import { ImageCropDialog } from '@/components/ImageCropDialog';
 import { PhoneVerificationDialog } from '@/components/PhoneVerificationDialog';
@@ -83,7 +84,7 @@ export default function Profile() {
     mutationFn: () => apiRequest<{ success: boolean; url: string; requires_account_creation?: boolean }>('POST', '/contracts/connect/create-onboarding-link'),
     onSuccess: (data: { url: string }) => {
       if (data.url) {
-        window.location.href = data.url;
+        safeRedirect(data.url, '/profile');
       } else {
         toast({
           title: 'Erreur',
