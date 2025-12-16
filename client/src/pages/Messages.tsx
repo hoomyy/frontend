@@ -15,6 +15,7 @@ import { queryClient } from '@/lib/queryClient';
 import type { Conversation, Message, Property } from '@shared/schema';
 import { apiRequest } from '@/lib/api';
 import { getBackendBaseURL } from '@/lib/apiConfig';
+import { getAuthToken } from '@/lib/auth';
 import { useLanguage } from '@/lib/useLanguage';
 import { useToast } from '@/hooks/use-toast';
 
@@ -146,7 +147,11 @@ export default function Messages() {
       const formData = new FormData();
       formData.append('image', file);
       
-      const token = localStorage.getItem('token');
+      const token = getAuthToken();
+      if (!token) {
+        throw new Error('Authentification requise. Veuillez vous reconnecter.');
+      }
+      
       const backendBaseURL = getBackendBaseURL();
       const response = await fetch(`${backendBaseURL}/api/upload/message-image`, {
         method: 'POST',
@@ -154,11 +159,18 @@ export default function Messages() {
           'Authorization': `Bearer ${token}`,
         },
         body: formData,
+        credentials: 'include', // Important pour les requêtes cross-origin
       });
       
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Erreur lors de l\'upload');
+        let errorMessage = 'Erreur lors de l\'upload';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch {
+          // Si la réponse n'est pas du JSON, utiliser le message par défaut
+        }
+        throw new Error(errorMessage);
       }
       
       return response.json();
