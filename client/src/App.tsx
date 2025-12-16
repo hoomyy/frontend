@@ -14,6 +14,7 @@ import {
   preloadHighPriorityRoutes,
   RoutePriority 
 } from "@/lib/router";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 // ============================================
 // BASE PATH
@@ -86,13 +87,34 @@ const AppRouter = memo(function AppRouter() {
           {/* Render routes in priority order for better code organization */}
           {routes
             .sort((a, b) => a.priority - b.priority)
-            .map((route) => (
-              <Route 
-                key={route.path} 
-                path={route.path} 
-                component={route.component}
-              />
-            ))}
+            .map((route) => {
+              const RouteComponent = route.component;
+              
+              // If route requires auth, wrap with ProtectedRoute
+              if (route.requiresAuth) {
+                const WrappedComponent = () => (
+                  <ProtectedRoute requireRole={route.requireRole}>
+                    <RouteComponent />
+                  </ProtectedRoute>
+                );
+                return (
+                  <Route 
+                    key={route.path} 
+                    path={route.path} 
+                    component={WrappedComponent}
+                  />
+                );
+              }
+              
+              // Public route
+              return (
+                <Route 
+                  key={route.path} 
+                  path={route.path} 
+                  component={RouteComponent}
+                />
+              );
+            })}
           
           {/* 404 fallback */}
           <Route component={NotFoundRoute} />

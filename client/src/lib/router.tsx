@@ -22,6 +22,8 @@ interface RouteConfig {
   component: LazyExoticComponent<ComponentType<unknown>>;
   preloadOn?: 'hover' | 'focus' | 'visible' | 'idle';
   prefetchData?: string[]; // Query keys to prefetch
+  requiresAuth?: boolean; // Require authentication
+  requireRole?: 'owner' | 'student' | 'admin'; // Require specific role
 }
 
 // Lazy loaders with retry mechanism for better reliability
@@ -107,6 +109,8 @@ export const routes: RouteConfig[] = [
     priority: RoutePriority.HIGH,
     component: createLazyComponent(() => import('@/pages/CreateProperty'), 'CreateProperty'),
     preloadOn: 'hover',
+    requiresAuth: true,
+    requireRole: 'owner',
   },
   {
     path: '/properties/:id',
@@ -120,36 +124,44 @@ export const routes: RouteConfig[] = [
     component: createLazyComponent(() => import('@/pages/OwnerDashboard'), 'OwnerDashboard'),
     preloadOn: 'idle',
     prefetchData: ['/properties/my-properties', '/requests/received'],
+    requiresAuth: true,
+    requireRole: 'owner',
   },
   {
     path: '/favorites',
     priority: RoutePriority.HIGH,
     component: createLazyComponent(() => import('@/pages/Favorites'), 'Favorites'),
     preloadOn: 'idle',
+    requiresAuth: true,
   },
   {
     path: '/requests',
     priority: RoutePriority.HIGH,
     component: createLazyComponent(() => import('@/pages/Requests'), 'Requests'),
     preloadOn: 'idle',
+    requiresAuth: true,
   },
   {
     path: '/contracts',
     priority: RoutePriority.HIGH,
     component: createLazyComponent(() => import('@/pages/Contracts'), 'Contracts'),
     preloadOn: 'idle',
+    requiresAuth: true,
   },
   {
     path: '/profile',
     priority: RoutePriority.HIGH,
     component: createLazyComponent(() => import('@/pages/Profile'), 'Profile'),
     preloadOn: 'idle',
+    requiresAuth: true,
   },
   {
     path: '/my-properties',
     priority: RoutePriority.HIGH,
     component: createLazyComponent(() => import('@/pages/MyProperties'), 'MyProperties'),
     preloadOn: 'idle',
+    requiresAuth: true,
+    requireRole: 'owner',
   },
   
   // === MEDIUM PRIORITY (Tier 2) - Lazy loaded ===
@@ -158,6 +170,8 @@ export const routes: RouteConfig[] = [
     priority: RoutePriority.MEDIUM,
     component: createLazyComponent(() => import('@/pages/EditProperty'), 'EditProperty'),
     preloadOn: 'hover',
+    requiresAuth: true,
+    requireRole: 'owner',
   },
   {
     path: '/messages',
@@ -165,16 +179,19 @@ export const routes: RouteConfig[] = [
     component: createLazyComponent(() => import('@/pages/Messages'), 'Messages'),
     preloadOn: 'idle', // Précharger dès que possible
     prefetchData: ['/conversations'],
+    requiresAuth: true,
   },
   {
     path: '/contracts/create/:propertyId',
     priority: RoutePriority.MEDIUM,
     component: createLazyComponent(() => import('@/pages/CreateContract'), 'CreateContract'),
+    requiresAuth: true,
   },
   {
     path: '/contracts/:id',
     priority: RoutePriority.MEDIUM,
     component: createLazyComponent(() => import('@/pages/ContractDetail'), 'ContractDetail'),
+    requiresAuth: true,
   },
   
   // === LOW PRIORITY (Tier 3) - Loaded on demand only ===
@@ -182,6 +199,8 @@ export const routes: RouteConfig[] = [
     path: '/admin/dashboard',
     priority: RoutePriority.LOW,
     component: createLazyComponent(() => import('@/pages/AdminDashboard'), 'AdminDashboard'),
+    requiresAuth: true,
+    requireRole: 'admin',
   },
   {
     path: '/cgu',
