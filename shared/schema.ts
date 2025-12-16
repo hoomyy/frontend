@@ -554,7 +554,7 @@ export const conversationSchema = z.object({
 
 export const sendMessageSchema = z.object({
   conversation_id: z.number(),
-  content: z.string().min(1),
+  content: z.string().min(1).max(500, 'Le message ne peut pas dépasser 500 caractères'),
 });
 
 // ==================== CONTRACT SCHEMAS ====================

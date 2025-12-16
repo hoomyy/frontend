@@ -33,6 +33,7 @@ export default function Messages() {
   const [messageText, setMessageText] = useState('');
   const [proposeContractDialogOpen, setProposeContractDialogOpen] = useState(false);
   const [pendingContractId, setPendingContractId] = useState<number | null>(null);
+  const MESSAGE_MAX_LENGTH = 500;
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -156,10 +157,33 @@ export default function Messages() {
 
   const handleSendMessage = () => {
     if (!messageText.trim() || !selectedConversation) return;
+    if (messageText.length > MESSAGE_MAX_LENGTH) {
+      toast({
+        title: 'Message trop long',
+        description: `Le message ne peut pas dépasser ${MESSAGE_MAX_LENGTH} caractères.`,
+        variant: 'destructive',
+      });
+      return;
+    }
     sendMessageMutation.mutate({
       conversation_id: selectedConversation,
       content: messageText,
     });
+  };
+
+  const handleMessageTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    if (value.length <= MESSAGE_MAX_LENGTH) {
+      setMessageText(value);
+    } else {
+      // Limiter à la longueur maximale
+      setMessageText(value.slice(0, MESSAGE_MAX_LENGTH));
+      toast({
+        title: 'Limite atteinte',
+        description: `Le message ne peut pas dépasser ${MESSAGE_MAX_LENGTH} caractères.`,
+        variant: 'destructive',
+      });
+    }
   };
 
   // Auto-resize textarea
@@ -576,35 +600,50 @@ export default function Messages() {
                             e.stopPropagation();
                             handleSendMessage();
                           }}
-                          className="flex gap-1 sm:gap-1.5 md:gap-2 items-end"
+                          className="flex flex-col gap-1.5 sm:gap-2"
                         >
-                          <Textarea
-                            ref={textareaRef}
-                            value={messageText}
-                            onChange={(e) => setMessageText(e.target.value)}
-                            placeholder={t('messages.type_message')}
-                            disabled={sendMessageMutation.isPending}
-                            data-testid="input-message"
-                            className="text-[13px] sm:text-sm md:text-base min-h-[2.5rem] max-h-[8rem] resize-none flex-1 overflow-y-auto"
-                            rows={1}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' && !e.shiftKey) {
-                                e.preventDefault();
-                                if (messageText.trim() && !sendMessageMutation.isPending) {
-                                  handleSendMessage();
-                                }
-                              }
-                            }}
-                          />
-                          <Button
-                            type="submit"
-                            size="icon"
-                            disabled={!messageText.trim() || sendMessageMutation.isPending}
-                            data-testid="button-send"
-                            className="h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 flex-shrink-0 touch-manipulation"
-                          >
-                            <Send className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                          </Button>
+                          <div className="flex gap-1 sm:gap-1.5 md:gap-2 items-end">
+                            <div className="flex-1 relative">
+                              <Textarea
+                                ref={textareaRef}
+                                value={messageText}
+                                onChange={handleMessageTextChange}
+                                placeholder={t('messages.type_message')}
+                                disabled={sendMessageMutation.isPending}
+                                data-testid="input-message"
+                                className="text-[13px] sm:text-sm md:text-base min-h-[2.5rem] max-h-[8rem] resize-none flex-1 overflow-y-auto pr-12"
+                                rows={1}
+                                maxLength={MESSAGE_MAX_LENGTH}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault();
+                                    if (messageText.trim() && !sendMessageMutation.isPending && messageText.length <= MESSAGE_MAX_LENGTH) {
+                                      handleSendMessage();
+                                    }
+                                  }
+                                }}
+                              />
+                              <div className="absolute bottom-2 right-2 text-[10px] sm:text-xs text-muted-foreground pointer-events-none">
+                                <span className={messageText.length > MESSAGE_MAX_LENGTH * 0.9 ? 'text-orange-500' : messageText.length >= MESSAGE_MAX_LENGTH ? 'text-red-500 font-semibold' : ''}>
+                                  {messageText.length}/{MESSAGE_MAX_LENGTH}
+                                </span>
+                              </div>
+                            </div>
+                            <Button
+                              type="submit"
+                              size="icon"
+                              disabled={!messageText.trim() || sendMessageMutation.isPending || messageText.length > MESSAGE_MAX_LENGTH}
+                              data-testid="button-send"
+                              className="h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 flex-shrink-0 touch-manipulation"
+                            >
+                              <Send className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                            </Button>
+                          </div>
+                          {messageText.length >= MESSAGE_MAX_LENGTH && (
+                            <p className="text-[10px] sm:text-xs text-red-500 px-1">
+                              La limite de {MESSAGE_MAX_LENGTH} caractères est atteinte.
+                            </p>
+                          )}
                         </form>
                       </div>
                     </CardContent>
