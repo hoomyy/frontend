@@ -533,6 +533,7 @@ export const messageSchema = z.object({
   conversation_id: z.number(),
   sender_id: z.number(),
   content: z.string(),
+  image_url: z.string().nullable().optional(),
   read_at: z.string().nullable(),
   created_at: z.string(),
 });
@@ -554,7 +555,10 @@ export const conversationSchema = z.object({
 
 export const sendMessageSchema = z.object({
   conversation_id: z.number(),
-  content: z.string().min(1).max(500, 'Le message ne peut pas dépasser 500 caractères'),
+  content: z.string().optional(),
+  image_url: z.string().optional(),
+}).refine((data) => data.content || data.image_url, {
+  message: 'Le message doit contenir du texte ou une image',
 });
 
 // ==================== CONTRACT SCHEMAS ====================

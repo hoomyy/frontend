@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useSearch, useLocation } from 'wouter';
-import { Send, Building2, ArrowLeft, FileText, Check, X } from 'lucide-react';
+import { Send, Building2, ArrowLeft, FileText, Check, X, Image as ImageIcon, XCircle } from 'lucide-react';
 import { MainLayout } from '@/components/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -14,6 +14,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { queryClient } from '@/lib/queryClient';
 import type { Conversation, Message, Property } from '@shared/schema';
 import { apiRequest } from '@/lib/api';
+import { getBackendBaseURL } from '@/lib/apiConfig';
 import { useLanguage } from '@/lib/useLanguage';
 import { useToast } from '@/hooks/use-toast';
 
@@ -31,12 +32,16 @@ export default function Messages() {
     conversationIdParam ? parseInt(conversationIdParam) : null
   );
   const [messageText, setMessageText] = useState('');
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [proposeContractDialogOpen, setProposeContractDialogOpen] = useState(false);
   const [pendingContractId, setPendingContractId] = useState<number | null>(null);
   const MESSAGE_MAX_LENGTH = 500;
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const scrollToBottom = () => {
     if (!scrollAreaRef.current) return;
@@ -121,16 +126,42 @@ export default function Messages() {
   const messages: Message[] = Array.isArray(messagesData) ? messagesData : [];
 
   const sendMessageMutation = useMutation({
-    mutationFn: (data: { conversation_id: number; content: string }) =>
+    mutationFn: (data: { conversation_id: number; content?: string; image_url?: string }) =>
       apiRequest('POST', '/messages', data),
     onSuccess: () => {
       setMessageText('');
+      setSelectedImage(null);
+      setImagePreview(null);
       queryClient.invalidateQueries({ queryKey: ['/messages', selectedConversation] });
       queryClient.invalidateQueries({ queryKey: ['/conversations'] });
       // Scroll to bottom after sending message
       setTimeout(() => {
         scrollToBottom();
       }, 200);
+    },
+  });
+
+  const uploadImageMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append('image', file);
+      
+      const token = localStorage.getItem('token');
+      const backendBaseURL = getBackendBaseURL();
+      const response = await fetch(`${backendBaseURL}/api/upload/message-image`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Erreur lors de l\'upload');
+      }
+      
+      return response.json();
     },
   });
 
@@ -155,8 +186,59 @@ export default function Messages() {
     };
   }, [messages]);
 
-  const handleSendMessage = () => {
-    if (!messageText.trim() || !selectedConversation) return;
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Vérifier la taille (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: 'Fichier trop volumineux',
+        description: 'L\'image ne peut pas dépasser 5MB.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Vérifier le type
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: 'Type de fichier invalide',
+        description: 'Veuillez sélectionner une image.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setSelectedImage(file);
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setImagePreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveImage = () => {
+    setSelectedImage(null);
+    setImagePreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleSendMessage = async () => {
+    if (!selectedConversation) return;
+    
+    // Le message doit avoir soit du texte, soit une image
+    if (!messageText.trim() && !selectedImage) {
+      toast({
+        title: 'Message vide',
+        description: 'Veuillez ajouter du texte ou une image.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     if (messageText.length > MESSAGE_MAX_LENGTH) {
       toast({
         title: 'Message trop long',
@@ -165,9 +247,31 @@ export default function Messages() {
       });
       return;
     }
+
+    let imageUrl: string | undefined = undefined;
+
+    // Upload l'image si elle existe
+    if (selectedImage) {
+      setUploadingImage(true);
+      try {
+        const uploadResult = await uploadImageMutation.mutateAsync(selectedImage);
+        imageUrl = uploadResult.url;
+      } catch (error: any) {
+        toast({
+          title: 'Erreur upload',
+          description: error.message || 'Impossible d\'uploader l\'image.',
+          variant: 'destructive',
+        });
+        setUploadingImage(false);
+        return;
+      }
+      setUploadingImage(false);
+    }
+
     sendMessageMutation.mutate({
       conversation_id: selectedConversation,
-      content: messageText,
+      content: messageText.trim() || undefined,
+      image_url: imageUrl,
     });
   };
 
@@ -514,9 +618,21 @@ export default function Messages() {
                                   <div
                                     className={isOwn ? 'max-w-[90%] xs:max-w-[85%] sm:max-w-[80%] md:max-w-[75%] lg:max-w-[70%] rounded-lg p-2 sm:p-2.5 md:p-3 bg-primary text-primary-foreground overflow-hidden min-w-0' : 'max-w-[90%] xs:max-w-[85%] sm:max-w-[80%] md:max-w-[75%] lg:max-w-[70%] rounded-lg p-2 sm:p-2.5 md:p-3 bg-muted overflow-hidden min-w-0'}
                                   >
-                                    <p className="text-[11px] sm:text-xs md:text-sm whitespace-pre-wrap break-all leading-relaxed" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere', maxWidth: '100%' }}>
-                                      {msg.content}
-                                    </p>
+                                    {msg.image_url && (
+                                      <div className="mb-2 rounded-md overflow-hidden">
+                                        <img
+                                          src={msg.image_url}
+                                          alt="Image du message"
+                                          className="max-w-full h-auto max-h-[300px] object-contain cursor-pointer"
+                                          onClick={() => window.open(msg.image_url!, '_blank')}
+                                        />
+                                      </div>
+                                    )}
+                                    {msg.content && (
+                                      <p className="text-[11px] sm:text-xs md:text-sm whitespace-pre-wrap break-all leading-relaxed" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere', maxWidth: '100%' }}>
+                                        {msg.content}
+                                      </p>
+                                    )}
                                     <p
                                       className={isOwn ? 'text-[9px] sm:text-[10px] md:text-xs mt-0.5 sm:mt-1 text-primary-foreground/70' : 'text-[9px] sm:text-[10px] md:text-xs mt-0.5 sm:mt-1 text-muted-foreground'}
                                     >
@@ -602,14 +718,51 @@ export default function Messages() {
                           }}
                           className="flex flex-col gap-1.5 sm:gap-2"
                         >
+                          {/* Aperçu de l'image */}
+                          {imagePreview && (
+                            <div className="relative inline-block max-w-[200px]">
+                              <img
+                                src={imagePreview}
+                                alt="Aperçu"
+                                className="rounded-md max-w-full h-auto max-h-[200px] object-contain"
+                              />
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                size="icon"
+                                className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
+                                onClick={handleRemoveImage}
+                              >
+                                <XCircle className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          )}
                           <div className="flex gap-1 sm:gap-1.5 md:gap-2 items-end">
+                            <input
+                              ref={fileInputRef}
+                              type="file"
+                              accept="image/*"
+                              onChange={handleImageSelect}
+                              className="hidden"
+                              id="message-image-input"
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              onClick={() => fileInputRef.current?.click()}
+                              disabled={sendMessageMutation.isPending || uploadingImage}
+                              className="h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 flex-shrink-0 touch-manipulation"
+                            >
+                              <ImageIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                            </Button>
                             <div className="flex-1 relative">
                               <Textarea
                                 ref={textareaRef}
                                 value={messageText}
                                 onChange={handleMessageTextChange}
                                 placeholder={t('messages.type_message')}
-                                disabled={sendMessageMutation.isPending}
+                                disabled={sendMessageMutation.isPending || uploadingImage}
                                 data-testid="input-message"
                                 className="text-[13px] sm:text-sm md:text-base min-h-[2.5rem] max-h-[8rem] resize-none flex-1 overflow-y-auto pr-12"
                                 rows={1}
@@ -617,7 +770,7 @@ export default function Messages() {
                                 onKeyDown={(e) => {
                                   if (e.key === 'Enter' && !e.shiftKey) {
                                     e.preventDefault();
-                                    if (messageText.trim() && !sendMessageMutation.isPending && messageText.length <= MESSAGE_MAX_LENGTH) {
+                                    if ((messageText.trim() || selectedImage) && !sendMessageMutation.isPending && !uploadingImage && messageText.length <= MESSAGE_MAX_LENGTH) {
                                       handleSendMessage();
                                     }
                                   }
@@ -632,11 +785,15 @@ export default function Messages() {
                             <Button
                               type="submit"
                               size="icon"
-                              disabled={!messageText.trim() || sendMessageMutation.isPending || messageText.length > MESSAGE_MAX_LENGTH}
+                              disabled={(!messageText.trim() && !selectedImage) || sendMessageMutation.isPending || uploadingImage || messageText.length > MESSAGE_MAX_LENGTH}
                               data-testid="button-send"
                               className="h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 flex-shrink-0 touch-manipulation"
                             >
-                              <Send className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                              {uploadingImage ? (
+                                <div className="h-3.5 w-3.5 sm:h-4 sm:w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <Send className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                              )}
                             </Button>
                           </div>
                           {messageText.length >= MESSAGE_MAX_LENGTH && (
