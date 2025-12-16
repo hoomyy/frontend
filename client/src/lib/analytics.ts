@@ -3,6 +3,8 @@
  * Tracks user interactions, navigation, and engagement
  */
 
+console.log('%c[Analytics] 📦 Module loading...', 'color: #ec4899; font-weight: bold');
+
 import { getAuthToken } from './auth';
 import { getAPIBaseURL } from './apiConfig';
 
@@ -171,6 +173,8 @@ let geoInfo: GeoInfo | null = null;
 // =============================================================================
 
 async function fetchGeoInfo(): Promise<GeoInfo | null> {
+  console.log('%c[Analytics] 🌍 Fetching geo info...', 'color: #8b5cf6');
+  
   // Try to get from cache first
   try {
     const cached = localStorage.getItem(GEO_INFO_KEY);
@@ -179,6 +183,7 @@ async function fetchGeoInfo(): Promise<GeoInfo | null> {
       // Cache for 1 hour
       if (Date.now() - data.timestamp < 3600000) {
         geoInfo = data.info;
+        console.log('%c[Analytics] 🌍 Using cached geo:', 'color: #8b5cf6', geoInfo);
         return geoInfo;
       }
     }
@@ -188,6 +193,7 @@ async function fetchGeoInfo(): Promise<GeoInfo | null> {
 
   try {
     // Use ipapi.co for IP and geo info (free, no API key needed)
+    console.log('%c[Analytics] 🌍 Calling ipapi.co...', 'color: #8b5cf6');
     const response = await fetch('https://ipapi.co/json/', { 
       signal: AbortSignal.timeout(5000) 
     });
@@ -198,6 +204,7 @@ async function fetchGeoInfo(): Promise<GeoInfo | null> {
         country: data.country_name,
         city: data.city,
       };
+      console.log('%c[Analytics] 🌍 Got geo from ipapi.co:', 'color: #10b981', geoInfo);
       // Cache the result
       localStorage.setItem(GEO_INFO_KEY, JSON.stringify({
         info: geoInfo,
@@ -205,7 +212,8 @@ async function fetchGeoInfo(): Promise<GeoInfo | null> {
       }));
       return geoInfo;
     }
-  } catch {
+  } catch (err) {
+    console.warn('%c[Analytics] 🌍 ipapi.co failed, trying ip-api.com...', 'color: #f59e0b', err);
     // Fallback to ip-api.com
     try {
       const response = await fetch('http://ip-api.com/json/?fields=query,country,city', {
@@ -310,9 +318,12 @@ async function flushEvents(): Promise<void> {
   eventQueue = [];
   saveQueueToStorage();
 
+  const apiUrl = `${getAPIBaseURL()}/admin/analytics/events`;
+  console.log(`%c[Analytics] Sending ${eventsToSend.length} events to ${apiUrl}`, 'color: #f59e0b; font-weight: bold');
+
   try {
     // Send to admin analytics endpoint (accepts from anyone, but only admin can VIEW)
-    const response = await fetch(`${getAPIBaseURL()}/admin/analytics/events`, {
+    const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -320,20 +331,20 @@ async function flushEvents(): Promise<void> {
       body: JSON.stringify({ events: eventsToSend }),
     });
 
-    if (!response.ok) {
+    if (response.ok) {
+      const result = await response.json();
+      console.log(`%c[Analytics] ✅ Sent successfully!`, 'color: #10b981; font-weight: bold', result);
+    } else {
+      console.error(`%c[Analytics] ❌ Server error: ${response.status}`, 'color: #ef4444; font-weight: bold', await response.text());
       // Re-queue events on failure
       eventQueue = [...eventsToSend, ...eventQueue];
       saveQueueToStorage();
     }
-  } catch {
+  } catch (error) {
+    console.error(`%c[Analytics] ❌ Network error`, 'color: #ef4444; font-weight: bold', error);
     // Re-queue events on error
     eventQueue = [...eventsToSend, ...eventQueue];
     saveQueueToStorage();
-    
-    // Log locally for debugging
-    if (import.meta.env.DEV) {
-      console.log('[Analytics] Events queued (offline):', eventsToSend.length);
-    }
   }
 }
 
@@ -347,10 +358,17 @@ function queueEvent(event: AnalyticsEvent): void {
   addToHistory(event); // Store in history for admin view
   updateSession({ events: (getOrCreateSession().events || 0) + 1 });
 
-  // Log in development
-  if (import.meta.env.DEV) {
-    console.log(`[Analytics] ${event.type}:`, event.action, event.metadata || '');
-  }
+  // ALWAYS log for debugging (temporary)
+  console.log(`%c[Analytics] ${event.type}`, 'color: #10b981; font-weight: bold', {
+    action: event.action,
+    page: event.page,
+    ip: event.ipAddress,
+    country: event.country,
+    device: event.device,
+    browser: event.browser,
+    userId: event.userId,
+    metadata: event.metadata,
+  });
 
   // Flush if queue is full
   if (eventQueue.length >= BATCH_SIZE) {
@@ -842,12 +860,17 @@ export const analytics = {
    * Initialize analytics
    */
   init(): void {
+    console.log('%c[Analytics] 🚀 Initializing...', 'color: #3b82f6; font-weight: bold');
     loadQueueFromStorage();
     startFlushTimer();
 
     // Fetch geo info first, then track page view
-    fetchGeoInfo().then(() => {
+    fetchGeoInfo().then((geo) => {
+      console.log('%c[Analytics] 🌍 Geo info loaded:', 'color: #3b82f6; font-weight: bold', geo);
       // Track initial page view with geo info
+      this.pageView();
+    }).catch((err) => {
+      console.warn('%c[Analytics] ⚠️ Geo fetch failed, continuing anyway', 'color: #f59e0b', err);
       this.pageView();
     });
 
@@ -979,10 +1002,12 @@ export function enableAutoClickTracking(): void {
 
 // Auto-initialize on import
 if (typeof window !== 'undefined') {
+  console.log('%c[Analytics] 🎬 Auto-initializing...', 'color: #ec4899; font-weight: bold');
   analytics.init();
   enableScrollTracking();
   trackPageTime();
   enableAutoClickTracking();
+  console.log('%c[Analytics] ✅ All tracking enabled!', 'color: #10b981; font-weight: bold');
 }
 
 export default analytics;
