@@ -4,6 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
     
     <!-- ===========================================
          SECURITY HEADERS
@@ -68,8 +71,9 @@
     <link rel="dns-prefetch" href="https://images.unsplash.com" />
     <link rel="dns-prefetch" href="https://js.stripe.com" />
     
-    <!-- Preload critical resources for faster loading -->
+    <!-- Preload only logo (small, critical) -->
     <link rel="preload" href="/logo.svg" as="image" type="image/svg+xml" />
+    <!-- Don't preload videos - too heavy, especially on mobile -->
     
     <!-- ===========================================
          FAVICONS
@@ -95,7 +99,7 @@
       body{min-height:100vh;background:#fff}
       #root{min-height:100vh;width:100%;display:flex;flex-direction:column}
       body:not(.loaded){opacity:0}
-      body.loaded{opacity:1;transition:opacity .15s ease-out}
+      body.loaded{opacity:1;transition:opacity .05s ease-out}
       .skeleton{background:linear-gradient(90deg,#f3f4f6 25%,#e5e7eb 50%,#f3f4f6 75%);background-size:200% 100%;animation:skeleton 1.2s ease-in-out infinite}
       @keyframes skeleton{0%{background-position:200% 0}100%{background-position:-200% 0}}
       .initial-loader{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#fff;z-index:9999}
@@ -183,8 +187,24 @@
     <div id="root"></div>
     
     <script>
-      // App version for cache busting
-      window.APP_VERSION = 'v8-' + Date.now();
+      // App version for cache busting - always fresh
+      window.APP_VERSION = 'v9-' + Date.now();
+      
+      // DISABLE ALL CACHE - clear everything on load
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          for(let registration of registrations) {
+            registration.unregister();
+          }
+        });
+      }
+      if ('caches' in window) {
+        caches.keys().then(function(names) {
+          return Promise.all(names.map(function(name) {
+            return caches.delete(name);
+          }));
+        });
+      }
       
       // CRITICAL: Clear stale caches and service workers on load errors
       (function() {
@@ -201,37 +221,33 @@
         
         window.__hideLoader = hideLoader;
         
-        // Clear ALL caches and service workers
+        // Clear ALL caches and service workers IMMEDIATELY on every load
         function clearAllCaches() {
-          console.log('[Hoomy] Clearing all caches...');
-          var promises = [];
-          
-          // Clear service worker caches
+          // Clear service worker caches immediately
           if ('caches' in window) {
-            promises.push(
-              caches.keys().then(function(names) {
-                return Promise.all(names.map(function(name) {
-                  console.log('[Hoomy] Deleting cache:', name);
-                  return caches.delete(name);
-                }));
-              })
-            );
+            caches.keys().then(function(names) {
+              return Promise.all(names.map(function(name) {
+                return caches.delete(name);
+              }));
+            }).catch(function() {
+              // Ignore errors
+            });
           }
           
-          // Unregister all service workers
+          // Unregister all service workers immediately
           if ('serviceWorker' in navigator) {
-            promises.push(
-              navigator.serviceWorker.getRegistrations().then(function(registrations) {
-                return Promise.all(registrations.map(function(reg) {
-                  console.log('[Hoomy] Unregistering service worker');
-                  return reg.unregister();
-                }));
-              })
-            );
+            navigator.serviceWorker.getRegistrations().then(function(registrations) {
+              return Promise.all(registrations.map(function(reg) {
+                return reg.unregister();
+              }));
+            }).catch(function() {
+              // Ignore errors
+            });
           }
-          
-          return Promise.all(promises);
         }
+        
+        // Clear caches immediately on every page load
+        clearAllCaches();
         
         // DISABLED: Auto-reload on errors causes infinite loops
         // Just log errors, don't reload
@@ -284,8 +300,8 @@
           });
         }
         
-        // Fallback: hide after 3s max
-        setTimeout(hideLoader, 3000);
+        // Fallback: hide immediately (no delay)
+        setTimeout(hideLoader, 50);
       })();
     </script>
     <script type="module" src="/src/main.tsx"></script>

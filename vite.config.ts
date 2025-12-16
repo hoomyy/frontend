@@ -165,7 +165,7 @@ export default defineConfig({
     },
     
     chunkSizeWarningLimit: 500,
-    assetsInlineLimit: 4096,
+    assetsInlineLimit: 2048, // Reduced from 4096 for faster initial load
   },
   
   // ============================================
@@ -205,6 +205,8 @@ export default defineConfig({
       'wouter',
       '@tanstack/react-query',
     ],
+    // Force re-optimization to avoid stale cache
+    force: isDev,
   },
   
   // ============================================

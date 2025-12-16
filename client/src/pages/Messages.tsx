@@ -103,7 +103,7 @@ export default function Messages() {
       if (response?.conversations && Array.isArray(response.conversations)) return response.conversations;
       return [];
     },
-    refetchInterval: 5000, // Poll for new conversations every 5 seconds
+    refetchInterval: 10000, // Poll for new conversations every 10 seconds (reduced frequency)
   });
 
   // S'assurer que conversations est toujours un tableau
@@ -120,7 +120,7 @@ export default function Messages() {
       if (response?.messages && Array.isArray(response.messages)) return response.messages;
       return [];
     },
-    refetchInterval: 3000, // Poll for new messages every 3 seconds
+    refetchInterval: 5000, // Poll for new messages every 5 seconds (reduced frequency)
   });
 
   // S'assurer que messages est toujours un tableau

@@ -44,46 +44,30 @@ if (typeof window !== 'undefined') {
   }
 }
 
-// Asset preloading and app initialization
-async function initializeApp() {
-  const loader = document.getElementById('initial-loader');
-  const progressText = loader?.querySelector('.loader-progress') as HTMLElement;
+// Ultra-fast app initialization - NO preloading, NO cache blocking
+function initializeApp() {
+  // Render app IMMEDIATELY - no waiting
+  renderApp();
   
-  // Clear expired cache in background
-  clearExpiredCache().catch(() => {
-    // Ignore errors
-  });
-  
-  // Preload assets with progress tracking
-  try {
-    await preloadAssets((progress) => {
-      if (progressText) {
-        progressText.textContent = `${progress.percentage}%`;
-      }
-    });
-  } catch (error) {
-    console.warn('Some assets failed to preload:', error);
-    // Continue anyway
-  }
-  
-  // Mark body as loaded
+  // Mark body as loaded immediately
   if (typeof document !== 'undefined') {
     document.body.classList.add('loaded');
   }
   
-  // Hide loader
+  // Hide loader IMMEDIATELY (no delay)
+  const loader = document.getElementById('initial-loader');
   if (loader) {
     loader.classList.add('hidden');
     setTimeout(() => {
       loader.remove();
-    }, 300);
+    }, 200);
   }
   
-  // Render app
-  renderApp();
+  // NO preloading - assets will load on demand
+  // NO cache clearing - let browser handle it naturally
 }
 
-// Start initialization
+// Start initialization immediately - NO async, NO waiting
 initializeApp();
 
 // Unregister service worker if it's causing issues (one-time check)

@@ -12,6 +12,8 @@ import { apiRequest } from '@/lib/api';
 import type { Canton } from '@shared/schema';
 import { useLanguage } from '@/lib/useLanguage';
 import { useAuth } from '@/lib/auth';
+import { lazyLoadAssets, getLazyAssets } from '@/lib/assetPreloader';
+import { useEffect } from 'react';
 
 export default function Landing() {
   const [, setLocation] = useLocation();
@@ -25,8 +27,8 @@ export default function Landing() {
     queryFn: async () => {
       return apiRequest<Canton[]>('GET', '/locations/cantons');
     },
-    staleTime: 1000 * 60 * 60, // 1 hour - cantons are very static
-    gcTime: 1000 * 60 * 60 * 24, // 24 hours
+    staleTime: 0, // No cache - always fresh
+    gcTime: 1000 * 60 * 5, // 5 minutes garbage collection
   });
 
 
@@ -72,6 +74,14 @@ export default function Landing() {
 
   const [videoError, setVideoError] = useState(false);
 
+  // Lazy load assets only when landing page is mounted
+  useEffect(() => {
+    // Load assets in background (non-blocking)
+    lazyLoadAssets(getLazyAssets()).catch(() => {
+      // Ignore errors
+    });
+  }, []);
+
   return (
     <MainLayout>
       <div className="relative overflow-hidden min-h-screen sm:min-h-[600px] md:min-h-screen">
@@ -81,7 +91,7 @@ export default function Landing() {
             loop
             muted
             playsInline
-            preload="auto"
+            preload="metadata"
             className="absolute inset-0 w-full h-full object-cover z-0"
             style={{ minHeight: '100vh' }}
             onError={() => {

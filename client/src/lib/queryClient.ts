@@ -171,15 +171,15 @@ export const queryClient = new QueryClient({
         throw new Error(`Query missing explicit queryFn. QueryKey: ${JSON.stringify(queryKey)}`);
       },
       
-      // Refetch settings
-      refetchOnWindowFocus: false,
+      // Refetch settings - always fresh data
+      refetchOnWindowFocus: true, // Refetch when user returns
       refetchOnReconnect: true,
-      refetchOnMount: false,
+      refetchOnMount: true, // Always refetch on mount for fresh data
       refetchInterval: false,
       
-      // Cache settings - optimized for performance
-      staleTime: 1000 * 60 * 5, // 5 minutes
-      gcTime: 1000 * 60 * 30, // 30 minutes garbage collection
+      // Cache settings - minimal cache for fast, fresh data
+      staleTime: 0, // NO cache - always fresh (faster updates)
+      gcTime: 1000 * 60 * 1, // 1 minute garbage collection (minimal)
       
       // Structural sharing for memoization
       structuralSharing: true,

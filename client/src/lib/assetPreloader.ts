@@ -3,25 +3,24 @@
  * Preloads critical assets (videos, images) and caches them for faster subsequent loads
  */
 
-const CACHE_NAME = 'hoomy-assets-v1';
-const CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days
+const CACHE_NAME = 'hoomy-assets-v3';
+const CACHE_DURATION = 0; // NO CACHE - always fresh
 
-// Critical assets to preload
-const CRITICAL_ASSETS = [
-  // Videos
+// NO preloading - all assets load on demand
+const CRITICAL_ASSETS: string[] = []; // Empty - no preloading
+
+// Non-critical assets for lazy loading (loaded on demand)
+const LAZY_ASSETS = [
+  // Videos - loaded only when landing page is visited
   '/video/background.webm',
   '/video/background.mp4',
-  // Logo
-  '/logo.svg',
-  // City images (used on landing page)
+  // City images - loaded only when landing page is visited
   '/images/zurich.webp',
   '/images/geneva.webp',
   '/images/lausanne.webp',
   '/images/bern.webp',
   '/images/basel.webp',
   '/images/lugano.webp',
-  // Favicon
-  '/favicon.png',
 ];
 
 interface PreloadProgress {
@@ -184,7 +183,7 @@ function preloadImage(src: string): Promise<void> {
 }
 
 /**
- * Preload all critical assets
+ * Preload critical assets (minimal, fast)
  */
 export async function preloadAssets(
   onProgress?: ProgressCallback
@@ -202,55 +201,15 @@ export async function preloadAssets(
     }
   };
   
-  // Preload assets in parallel with error handling
+  // Preload only small critical assets (no videos)
   const preloadPromises = CRITICAL_ASSETS.map(async (asset) => {
     try {
-      // For videos, preload directly (don't cache via fetch)
-      if (asset.includes('/video/')) {
-        if (asset.endsWith('.webm')) {
-          try {
-            await preloadVideo(asset);
-            // Also try to cache it
-            try {
-              const response = await fetch(asset);
-              if (response.ok) {
-                await cacheAsset(asset, response.clone());
-              }
-            } catch {
-              // Ignore cache errors for videos
-            }
-          } catch {
-            // If webm fails, try mp4
-            const mp4Asset = asset.replace('.webm', '.mp4');
-            if (CRITICAL_ASSETS.includes(mp4Asset)) {
-              await preloadVideo(mp4Asset);
-              try {
-                const response = await fetch(mp4Asset);
-                if (response.ok) {
-                  await cacheAsset(mp4Asset, response.clone());
-                }
-              } catch {
-                // Ignore cache errors
-              }
-            }
-          }
-        } else if (asset.endsWith('.mp4')) {
-          await preloadVideo(asset);
-          // Try to cache it
-          try {
-            const response = await fetch(asset);
-            if (response.ok) {
-              await cacheAsset(asset, response.clone());
-            }
-          } catch {
-            // Ignore cache errors
-          }
-        }
-      } else {
-        // For images and other assets, load and cache
-        await loadAsset(asset);
-        await preloadImage(asset);
-      }
+      // Only preload images (no videos in critical assets)
+      await preloadImage(asset);
+      // Try to cache it (non-blocking)
+      loadAsset(asset).catch(() => {
+        // Ignore cache errors
+      });
       
       loaded++;
       updateProgress();
@@ -266,30 +225,35 @@ export async function preloadAssets(
 }
 
 /**
- * Clear expired cache entries
+ * Lazy load assets when needed - DISABLED for fast loading
+ */
+export async function lazyLoadAssets(assets: string[]): Promise<void> {
+  // NO lazy loading - assets load naturally when needed
+  // This prevents any blocking or cache issues
+  return Promise.resolve();
+}
+
+/**
+ * Get lazy assets for landing page
+ */
+export function getLazyAssets(): string[] {
+  return LAZY_ASSETS;
+}
+
+/**
+ * Clear expired cache entries - DISABLED (no cache)
  */
 export async function clearExpiredCache(): Promise<void> {
-  const cache = await openCache();
-  if (!cache) return;
-  
+  // Clear ALL cache immediately (no cache policy)
   try {
-    const keys = await cache.keys();
-    const now = Date.now();
-    
-    for (const request of keys) {
-      const response = await cache.match(request);
-      if (response) {
-        const cachedDate = response.headers.get('cached-date');
-        if (cachedDate) {
-          const cacheTime = parseInt(cachedDate, 10);
-          if (now - cacheTime > CACHE_DURATION) {
-            await cache.delete(request);
-          }
-        }
-      }
+    if (isCacheAPIAvailable()) {
+      await caches.delete(CACHE_NAME);
+      // Also clear all other caches
+      const cacheNames = await caches.keys();
+      await Promise.all(cacheNames.map(name => caches.delete(name)));
     }
   } catch (error) {
-    console.warn('Error clearing expired cache:', error);
+    // Ignore errors
   }
 }
 
