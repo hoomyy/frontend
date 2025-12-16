@@ -13,6 +13,7 @@ import { useAuth } from '@/lib/auth';
 import { loginSchema, type LoginInput, type AuthResponse } from '@shared/schema';
 import { useMutation } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/api';
+import { analytics } from '@/lib/analytics';
 
 export default function Login() {
   const [, setLocation] = useLocation();
@@ -44,6 +45,9 @@ export default function Login() {
   const loginMutation = useMutation({
     mutationFn: (data: LoginInput) => apiRequest<AuthResponse>('POST', '/login', data),
     onSuccess: (data) => {
+      // Track successful login
+      analytics.auth('login', { role: data.user.role, userId: data.user.id });
+      
       // Mettre à jour l'état d'authentification
       login(data.token, data.user);
       
@@ -61,8 +65,9 @@ export default function Login() {
       window.location.href = redirectPath;
     },
     onError: (err: Error & { code?: string }) => {
-      // Utiliser le code d'erreur si disponible pour des messages plus précis
+      // Track failed login
       const errorCode = (err as any).code;
+      analytics.auth('login_failed', { errorCode, message: err.message });
       
       if (errorCode === 'EMAIL_NOT_VERIFIED' || err.message.includes('EMAIL_NOT_VERIFIED')) {
         setError('Votre adresse email n\'est pas encore vérifiée. Consultez votre boîte mail (et les spams) pour trouver le code de vérification.');
@@ -77,6 +82,7 @@ export default function Login() {
 
   const onSubmit = (data: LoginInput) => {
     setError('');
+    analytics.formSubmit('login', true, { email: data.email });
     loginMutation.mutate(data);
   };
 

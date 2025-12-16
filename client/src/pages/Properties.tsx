@@ -20,6 +20,7 @@ import type { Property, Canton, City } from '@shared/schema';
 import { useLanguage } from '@/lib/useLanguage';
 import { getAPIBaseURL } from '@/lib/apiConfig';
 import { CityAutocomplete } from '@/components/CityAutocomplete';
+import { analytics } from '@/lib/analytics';
 
 export default function Properties() {
   const search = useSearch();
@@ -44,6 +45,10 @@ export default function Properties() {
     }
     debounceTimerRef.current = setTimeout(() => {
       setDebouncedSearchQuery(searchQuery);
+      // Track search when user stops typing
+      if (searchQuery.trim()) {
+        analytics.search(searchQuery.trim());
+      }
     }, 100); // 100ms debounce - ultra-fast response
 
     return () => {
@@ -331,8 +336,10 @@ export default function Properties() {
     }
 
     if (favoriteIds.has(propertyId)) {
+      analytics.property('unfavorite', propertyId);
       removeFavoriteMutation.mutate(propertyId);
     } else {
+      analytics.property('favorite', propertyId);
       addFavoriteMutation.mutate(propertyId);
     }
   }, [isAuthenticated, favoriteIds, addFavoriteMutation, removeFavoriteMutation, setLocation]);
@@ -357,9 +364,13 @@ export default function Properties() {
   const handleCantonChange = useCallback((value: string) => {
     setSelectedCanton(value);
     setSelectedCity('___all___');
+    if (value !== '___all___') {
+      analytics.filter('canton', value);
+    }
   }, []);
 
   const handleClearFilters = useCallback(() => {
+    analytics.feature('filters', 'clear_all');
     setSelectedCanton('___all___');
     setSelectedCity('___all___');
     setPropertyType('___all___');

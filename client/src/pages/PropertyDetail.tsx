@@ -22,6 +22,7 @@ import type { Property, PropertyPhoto } from '@shared/schema';
 import { normalizeImageUrl } from '@/lib/imageUtils';
 import { formatUserDisplayName, getUserProfilePicture, getUserInitials } from '@/lib/userUtils';
 import { useLanguage } from '@/lib/useLanguage';
+import { analytics } from '@/lib/analytics';
 
 export default function PropertyDetail() {
   const [, params] = useRoute('/properties/:id');
@@ -61,7 +62,16 @@ export default function PropertyDetail() {
       if (!numericPropertyId) {
         throw new Error('Invalid property ID');
       }
-      return apiRequest<Property & { photos?: PropertyPhoto[] }>('GET', `/properties/${numericPropertyId}`);
+      const result = await apiRequest<Property & { photos?: PropertyPhoto[] }>('GET', `/properties/${numericPropertyId}`);
+      // Track property view
+      analytics.property('view', numericPropertyId, {
+        title: result.title,
+        price: result.price,
+        city: result.city_name,
+        canton: result.canton_code,
+        propertyType: result.property_type,
+      });
+      return result;
     },
     staleTime: 1000 * 60 * 5, // 5 minutes - property details don't change often
     gcTime: 1000 * 60 * 15, // 15 minutes
@@ -92,6 +102,11 @@ export default function PropertyDetail() {
 
   const handleSendRequest = () => {
     if (!numericPropertyId || !requestMessage.trim()) return;
+    // Track contact request
+    analytics.property('contact', numericPropertyId, { 
+      messageLength: requestMessage.length,
+      propertyTitle: property?.title 
+    });
     sendRequestMutation.mutate({
       property_id: numericPropertyId,
       message: requestMessage,

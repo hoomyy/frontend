@@ -15,6 +15,7 @@ import { apiRequest } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { useLanguage } from '@/lib/useLanguage';
 import { getAPIBaseURL } from '@/lib/apiConfig';
+import { analytics } from '@/lib/analytics';
 
 export default function Favorites() {
   const { user, isAuthenticated, isStudent } = useAuth();
@@ -78,7 +79,10 @@ export default function Favorites() {
   });
 
   const removeFavoriteMutation = useMutation({
-    mutationFn: (propertyId: number) => apiRequest('DELETE', `/favorites/${propertyId}`),
+    mutationFn: (propertyId: number) => {
+      analytics.property('unfavorite', propertyId);
+      return apiRequest('DELETE', `/favorites/${propertyId}`);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/favorites'] });
     },

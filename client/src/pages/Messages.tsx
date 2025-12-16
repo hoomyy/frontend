@@ -19,6 +19,7 @@ import { getAuthToken } from '@/lib/auth';
 import { useLanguage } from '@/lib/useLanguage';
 import { useToast } from '@/hooks/use-toast';
 import { escapeHtml, sanitizeUrl, isTrustedUrl, safeOpen } from '@/lib/security';
+import { analytics } from '@/lib/analytics';
 
 export default function Messages() {
   const { user, isOwner } = useAuth();
@@ -130,7 +131,14 @@ export default function Messages() {
   const sendMessageMutation = useMutation({
     mutationFn: (data: { conversation_id: number; content?: string; image_url?: string }) =>
       apiRequest('POST', '/messages', data),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
+      // Track message sent
+      analytics.message(
+        variables.image_url ? 'send_image' : 'send_message', 
+        variables.conversation_id,
+        { hasImage: !!variables.image_url, contentLength: variables.content?.length || 0 }
+      );
+      
       setMessageText('');
       setSelectedImage(null);
       setImagePreview(null);
@@ -545,7 +553,13 @@ export default function Messages() {
                         {conversations.map((conv) => (
                           <button
                             key={conv.id}
-                            onClick={() => setSelectedConversation(conv.id)}
+                            onClick={() => {
+                              setSelectedConversation(conv.id);
+                              analytics.message('open_conversation', conv.id, { 
+                                propertyTitle: conv.property_title,
+                                otherUser: conv.other_user_name 
+                              });
+                            }}
                             className={selectedConversation === conv.id ? 'w-full text-left p-2 sm:p-2.5 md:p-3 lg:p-4 rounded-md transition-colors hover-elevate active:scale-[0.98] bg-accent touch-manipulation' : 'w-full text-left p-2 sm:p-2.5 md:p-3 lg:p-4 rounded-md transition-colors hover-elevate active:scale-[0.98] touch-manipulation'}
                             data-testid={`button-conversation-${conv.id}`}
                           >

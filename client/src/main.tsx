@@ -4,6 +4,7 @@ import "./index.css";
 import { LanguageProvider } from "./lib/useLanguage";
 import "./lib/cacheUtils"; // Load cache utilities globally
 import { preloadAssets, clearExpiredCache } from "./lib/assetPreloader";
+import "./lib/analytics"; // Initialize analytics tracking
 
 // Type declaration for window properties
 declare global {

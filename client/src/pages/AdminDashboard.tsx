@@ -4,7 +4,8 @@ import {
   Shield, CheckCircle2, XCircle, Eye, Loader2, AlertTriangle, 
   Users, Home, Ban, Volume2, VolumeX, Trash2, Search, 
   Calendar, Mail, Phone, TrendingUp, FileText, Clock, 
-  Filter, MoreVertical, Edit, EyeOff, CheckCircle
+  Filter, MoreVertical, Edit, EyeOff, CheckCircle, BarChart3,
+  MousePointer, MessageSquare, Heart, LogIn, Activity
 } from 'lucide-react';
 import { MainLayout } from '@/components/MainLayout';
 import { useAuth } from '@/lib/auth';
@@ -26,6 +27,7 @@ import { useLanguage } from '@/lib/useLanguage';
 import type { AdminKYC, User, Property } from '@shared/schema';
 import { Skeleton } from '@/components/ui/skeleton';
 import { normalizeImageUrl } from '@/lib/imageUtils';
+import { analytics } from '@/lib/analytics';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -491,12 +493,16 @@ export default function AdminDashboard() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
             <TabsTrigger value="users">Utilisateurs</TabsTrigger>
             <TabsTrigger value="properties">Propriétés</TabsTrigger>
             <TabsTrigger value="kyc">Vérifications KYC</TabsTrigger>
             <TabsTrigger value="logs">Logs</TabsTrigger>
+            <TabsTrigger value="analytics">
+              <BarChart3 className="h-4 w-4 mr-1" />
+              Analytics
+            </TabsTrigger>
           </TabsList>
 
           {/* VUE D'ENSEMBLE */}
@@ -1208,6 +1214,164 @@ export default function AdminDashboard() {
                     )}
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ANALYTICS */}
+          <TabsContent value="analytics" className="space-y-6">
+            {/* Stats Overview */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Sessions Uniques</CardTitle>
+                  <Activity className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{analytics.getUniqueSessions()}</div>
+                  <p className="text-xs text-muted-foreground">Dernières 500 actions</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Utilisateurs Trackés</CardTitle>
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{analytics.getUniqueUsers()}</div>
+                  <p className="text-xs text-muted-foreground">Utilisateurs connectés</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total Événements</CardTitle>
+                  <MousePointer className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{analytics.getHistory().length}</div>
+                  <p className="text-xs text-muted-foreground">Actions trackées</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Session Actuelle</CardTitle>
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{analytics.getSession().pageViews}</div>
+                  <p className="text-xs text-muted-foreground">Pages vues cette session</p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Event Summary */}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle>Résumé des Actions</CardTitle>
+                  <CardDescription>Types d'événements les plus fréquents</CardDescription>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => {
+                  analytics.clearHistory();
+                  toast({ title: 'Historique effacé', description: 'Les données analytics ont été supprimées.' });
+                }}>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Effacer
+                </Button>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {Object.entries(analytics.getSummary())
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 12)
+                    .map(([key, count]) => {
+                      const [type, action] = key.split(':');
+                      const getIcon = () => {
+                        switch(type) {
+                          case 'page_view': return <Eye className="h-4 w-4" />;
+                          case 'click': return <MousePointer className="h-4 w-4" />;
+                          case 'auth': return <LogIn className="h-4 w-4" />;
+                          case 'property': return <Home className="h-4 w-4" />;
+                          case 'message': return <MessageSquare className="h-4 w-4" />;
+                          case 'search': return <Search className="h-4 w-4" />;
+                          case 'filter': return <Filter className="h-4 w-4" />;
+                          default: return <Activity className="h-4 w-4" />;
+                        }
+                      };
+                      return (
+                        <div key={key} className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+                          {getIcon()}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{action}</p>
+                            <p className="text-xs text-muted-foreground">{type}</p>
+                          </div>
+                          <Badge variant="secondary">{count}</Badge>
+                        </div>
+                      );
+                    })}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Recent Events */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Derniers Événements</CardTitle>
+                <CardDescription>Historique en temps réel des actions utilisateurs</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2 max-h-[500px] overflow-y-auto">
+                  {analytics.getHistory().slice(0, 50).map((event, index) => {
+                    const getEventIcon = () => {
+                      switch(event.type) {
+                        case 'page_view': return <Eye className="h-4 w-4 text-blue-500" />;
+                        case 'click': return <MousePointer className="h-4 w-4 text-green-500" />;
+                        case 'auth': return <LogIn className="h-4 w-4 text-purple-500" />;
+                        case 'property': return <Home className="h-4 w-4 text-orange-500" />;
+                        case 'message': return <MessageSquare className="h-4 w-4 text-pink-500" />;
+                        case 'search': return <Search className="h-4 w-4 text-yellow-500" />;
+                        case 'filter': return <Filter className="h-4 w-4 text-cyan-500" />;
+                        case 'error': return <AlertTriangle className="h-4 w-4 text-red-500" />;
+                        default: return <Activity className="h-4 w-4 text-gray-500" />;
+                      }
+                    };
+                    
+                    return (
+                      <div key={`${event.timestamp}-${index}`} className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg hover:bg-muted transition-colors">
+                        <div className="mt-0.5">{getEventIcon()}</div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-sm">{event.action}</span>
+                            <Badge variant="outline" className="text-xs">{event.type}</Badge>
+                          </div>
+                          <div className="flex flex-wrap gap-2 mt-1 text-xs text-muted-foreground">
+                            <span>{event.page}</span>
+                            {event.userId && <span>• User #{event.userId}</span>}
+                            <span>• {new Date(event.timestamp).toLocaleString('fr-FR')}</span>
+                          </div>
+                          {event.metadata && Object.keys(event.metadata).length > 0 && (
+                            <details className="mt-2">
+                              <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
+                                Détails
+                              </summary>
+                              <pre className="mt-1 text-xs bg-background p-2 rounded overflow-auto max-w-full">
+                                {JSON.stringify(event.metadata, null, 2)}
+                              </pre>
+                            </details>
+                          )}
+                        </div>
+                        <div className="text-xs text-muted-foreground whitespace-nowrap">
+                          {event.screenSize}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {analytics.getHistory().length === 0 && (
+                    <div className="text-center py-8 text-muted-foreground">
+                      Aucun événement enregistré pour le moment
+                    </div>
+                  )}
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
