@@ -28,6 +28,10 @@ import type { AdminKYC, User, Property } from '@shared/schema';
 import { Skeleton } from '@/components/ui/skeleton';
 import { normalizeImageUrl } from '@/lib/imageUtils';
 import { analytics } from '@/lib/analytics';
+import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, Legend, AreaChart, Area, LineChart, Line
+} from 'recharts';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -1254,61 +1258,275 @@ export default function AdminDashboard() {
               </Card>
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Session Actuelle</CardTitle>
-                  <Clock className="h-4 w-4 text-muted-foreground" />
+                  <CardTitle className="text-sm font-medium">IPs Uniques</CardTitle>
+                  <Shield className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{analytics.getSession().pageViews}</div>
-                  <p className="text-xs text-muted-foreground">Pages vues cette session</p>
+                  <div className="text-2xl font-bold">{analytics.getUniqueIPs().length}</div>
+                  <p className="text-xs text-muted-foreground">Adresses IP détectées</p>
                 </CardContent>
               </Card>
             </div>
 
-            {/* Event Summary */}
+            {/* Charts Row 1 */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Daily Visits Chart */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>📈 Visites des 7 derniers jours</CardTitle>
+                  <CardDescription>Pages vues et utilisateurs uniques par jour</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-[300px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={analytics.getDailyVisits()}>
+                        <defs>
+                          <linearGradient id="colorVisits" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                          </linearGradient>
+                          <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                            <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                        <XAxis dataKey="day" className="text-xs" />
+                        <YAxis className="text-xs" />
+                        <Tooltip 
+                          contentStyle={{ 
+                            backgroundColor: 'hsl(var(--background))', 
+                            border: '1px solid hsl(var(--border))',
+                            borderRadius: '8px'
+                          }} 
+                        />
+                        <Area type="monotone" dataKey="visits" stroke="#3b82f6" fill="url(#colorVisits)" name="Pages vues" />
+                        <Area type="monotone" dataKey="users" stroke="#10b981" fill="url(#colorUsers)" name="Utilisateurs" />
+                        <Legend />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Hourly Visits Chart */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>🕐 Visites par heure</CardTitle>
+                  <CardDescription>Quand les utilisateurs visitent le site</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-[300px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={analytics.getHourlyVisits()}>
+                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                        <XAxis dataKey="hour" className="text-xs" />
+                        <YAxis className="text-xs" />
+                        <Tooltip 
+                          contentStyle={{ 
+                            backgroundColor: 'hsl(var(--background))', 
+                            border: '1px solid hsl(var(--border))',
+                            borderRadius: '8px'
+                          }} 
+                        />
+                        <Bar dataKey="visits" fill="#8b5cf6" radius={[4, 4, 0, 0]} name="Visites" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Charts Row 2 */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Device Distribution */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>📱 Appareils</CardTitle>
+                  <CardDescription>Distribution des types d'appareils</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-[250px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={analytics.getDeviceDistribution()}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={80}
+                          dataKey="count"
+                          nameKey="device"
+                          label={({ device, percentage }) => `${device} ${percentage}%`}
+                        >
+                          {analytics.getDeviceDistribution().map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={['#3b82f6', '#10b981', '#f59e0b'][index]} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Action Types Distribution */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>🎯 Types d'actions</CardTitle>
+                  <CardDescription>Répartition des événements trackés</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-[250px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={analytics.getActionDistribution().slice(0, 6)}
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={80}
+                          dataKey="value"
+                          nameKey="name"
+                          label={({ name }) => name}
+                        >
+                          {analytics.getActionDistribution().slice(0, 6).map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Browser Distribution */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>🌐 Navigateurs</CardTitle>
+                  <CardDescription>Navigateurs utilisés</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {analytics.getBrowserDistribution().slice(0, 5).map((item, index) => (
+                      <div key={item.browser} className="flex items-center gap-3">
+                        <div className="w-20 text-sm font-medium">{item.browser}</div>
+                        <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden">
+                          <div 
+                            className="h-full rounded-full transition-all"
+                            style={{ 
+                              width: `${(item.count / (analytics.getBrowserDistribution()[0]?.count || 1)) * 100}%`,
+                              backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'][index]
+                            }}
+                          />
+                        </div>
+                        <div className="w-12 text-sm text-right text-muted-foreground">{item.count}</div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Top Pages & Countries */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Top Pages */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>📄 Pages les plus visitées</CardTitle>
+                  <CardDescription>Classement des pages par nombre de vues</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {analytics.getPageRanking().map((item, index) => (
+                      <div key={item.page} className="flex items-center gap-3 p-2 bg-muted/50 rounded-lg">
+                        <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold">
+                          {index + 1}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{item.page}</p>
+                        </div>
+                        <Badge variant="secondary">{item.visits} vues</Badge>
+                      </div>
+                    ))}
+                    {analytics.getPageRanking().length === 0 && (
+                      <p className="text-center text-muted-foreground py-4">Aucune donnée</p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Countries */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>🌍 Pays des visiteurs</CardTitle>
+                  <CardDescription>Origine géographique des utilisateurs</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {analytics.getCountryDistribution().slice(0, 8).map((item, index) => (
+                      <div key={item.country} className="flex items-center gap-3 p-2 bg-muted/50 rounded-lg">
+                        <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold">
+                          {index + 1}
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-sm font-medium">{item.country}</p>
+                        </div>
+                        <Badge variant="outline">{item.count}</Badge>
+                      </div>
+                    ))}
+                    {analytics.getCountryDistribution().length === 0 && (
+                      <p className="text-center text-muted-foreground py-4">Aucune donnée géographique</p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* IP Addresses Table */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
-                  <CardTitle>Résumé des Actions</CardTitle>
-                  <CardDescription>Types d'événements les plus fréquents</CardDescription>
+                  <CardTitle>🔒 Adresses IP</CardTitle>
+                  <CardDescription>Liste des IPs uniques avec localisation</CardDescription>
                 </div>
                 <Button variant="outline" size="sm" onClick={() => {
                   analytics.clearHistory();
                   toast({ title: 'Historique effacé', description: 'Les données analytics ont été supprimées.' });
                 }}>
                   <Trash2 className="h-4 w-4 mr-2" />
-                  Effacer
+                  Effacer tout
                 </Button>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {Object.entries(analytics.getSummary())
-                    .sort((a, b) => b[1] - a[1])
-                    .slice(0, 12)
-                    .map(([key, count]) => {
-                      const [type, action] = key.split(':');
-                      const getIcon = () => {
-                        switch(type) {
-                          case 'page_view': return <Eye className="h-4 w-4" />;
-                          case 'click': return <MousePointer className="h-4 w-4" />;
-                          case 'auth': return <LogIn className="h-4 w-4" />;
-                          case 'property': return <Home className="h-4 w-4" />;
-                          case 'message': return <MessageSquare className="h-4 w-4" />;
-                          case 'search': return <Search className="h-4 w-4" />;
-                          case 'filter': return <Filter className="h-4 w-4" />;
-                          default: return <Activity className="h-4 w-4" />;
-                        }
-                      };
-                      return (
-                        <div key={key} className="flex items-center gap-2 p-3 bg-muted rounded-lg">
-                          {getIcon()}
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{action}</p>
-                            <p className="text-xs text-muted-foreground">{type}</p>
-                          </div>
-                          <Badge variant="secondary">{count}</Badge>
-                        </div>
-                      );
-                    })}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left p-2 font-medium">IP</th>
+                        <th className="text-left p-2 font-medium">Pays</th>
+                        <th className="text-left p-2 font-medium">Ville</th>
+                        <th className="text-right p-2 font-medium">Visites</th>
+                        <th className="text-right p-2 font-medium">Dernière visite</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {analytics.getUniqueIPs().slice(0, 20).map((item) => (
+                        <tr key={item.ip} className="border-b hover:bg-muted/50">
+                          <td className="p-2 font-mono text-xs">{item.ip}</td>
+                          <td className="p-2">{item.country}</td>
+                          <td className="p-2">{item.city}</td>
+                          <td className="p-2 text-right">
+                            <Badge variant="secondary">{item.visits}</Badge>
+                          </td>
+                          <td className="p-2 text-right text-muted-foreground text-xs">{item.lastSeen}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {analytics.getUniqueIPs().length === 0 && (
+                    <p className="text-center text-muted-foreground py-8">Aucune adresse IP enregistrée</p>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -1316,12 +1534,12 @@ export default function AdminDashboard() {
             {/* Recent Events */}
             <Card>
               <CardHeader>
-                <CardTitle>Derniers Événements</CardTitle>
+                <CardTitle>⚡ Derniers Événements</CardTitle>
                 <CardDescription>Historique en temps réel des actions utilisateurs</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-2 max-h-[500px] overflow-y-auto">
-                  {analytics.getHistory().slice(0, 50).map((event, index) => {
+                <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                  {analytics.getHistory().slice(0, 30).map((event, index) => {
                     const getEventIcon = () => {
                       switch(event.type) {
                         case 'page_view': return <Eye className="h-4 w-4 text-blue-500" />;
@@ -1340,13 +1558,20 @@ export default function AdminDashboard() {
                       <div key={`${event.timestamp}-${index}`} className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg hover:bg-muted transition-colors">
                         <div className="mt-0.5">{getEventIcon()}</div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-medium text-sm">{event.action}</span>
                             <Badge variant="outline" className="text-xs">{event.type}</Badge>
+                            {event.ipAddress && (
+                              <Badge variant="secondary" className="text-xs font-mono">{event.ipAddress}</Badge>
+                            )}
                           </div>
                           <div className="flex flex-wrap gap-2 mt-1 text-xs text-muted-foreground">
                             <span>{event.page}</span>
                             {event.userId && <span>• User #{event.userId}</span>}
+                            {event.country && <span>• {event.country}</span>}
+                            {event.city && <span>({event.city})</span>}
+                            <span>• {event.device}</span>
+                            <span>• {event.browser}</span>
                             <span>• {new Date(event.timestamp).toLocaleString('fr-FR')}</span>
                           </div>
                           {event.metadata && Object.keys(event.metadata).length > 0 && (
@@ -1359,9 +1584,6 @@ export default function AdminDashboard() {
                               </pre>
                             </details>
                           )}
-                        </div>
-                        <div className="text-xs text-muted-foreground whitespace-nowrap">
-                          {event.screenSize}
                         </div>
                       </div>
                     );

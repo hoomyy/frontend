@@ -25,6 +25,12 @@ interface AnalyticsEvent {
   userAgent: string;
   screenSize: string;
   language: string;
+  ipAddress?: string;
+  country?: string;
+  city?: string;
+  device: 'mobile' | 'tablet' | 'desktop';
+  browser: string;
+  os: string;
 }
 
 type EventType = 
@@ -66,6 +72,15 @@ interface SessionData {
   referrer: string;
   entryPage: string;
   device: 'mobile' | 'tablet' | 'desktop';
+  ipAddress?: string;
+  country?: string;
+  city?: string;
+}
+
+interface GeoInfo {
+  ip: string;
+  country?: string;
+  city?: string;
 }
 
 interface UserEngagement {
@@ -141,6 +156,7 @@ function updateSession(updates: Partial<SessionData>): void {
 
 const EVENT_QUEUE_KEY = 'hoomy_analytics_queue';
 const EVENT_HISTORY_KEY = 'hoomy_analytics_history';
+const GEO_INFO_KEY = 'hoomy_geo_info';
 const BATCH_SIZE = 10;
 const FLUSH_INTERVAL = 30000; // 30 seconds
 const MAX_HISTORY_SIZE = 500; // Keep last 500 events for admin view
@@ -148,6 +164,96 @@ const MAX_HISTORY_SIZE = 500; // Keep last 500 events for admin view
 let eventQueue: AnalyticsEvent[] = [];
 let eventHistory: AnalyticsEvent[] = [];
 let flushTimer: NodeJS.Timeout | null = null;
+let geoInfo: GeoInfo | null = null;
+
+// =============================================================================
+// IP & GEO DETECTION
+// =============================================================================
+
+async function fetchGeoInfo(): Promise<GeoInfo | null> {
+  // Try to get from cache first
+  try {
+    const cached = localStorage.getItem(GEO_INFO_KEY);
+    if (cached) {
+      const data = JSON.parse(cached);
+      // Cache for 1 hour
+      if (Date.now() - data.timestamp < 3600000) {
+        geoInfo = data.info;
+        return geoInfo;
+      }
+    }
+  } catch {
+    // Ignore cache errors
+  }
+
+  try {
+    // Use ipapi.co for IP and geo info (free, no API key needed)
+    const response = await fetch('https://ipapi.co/json/', { 
+      signal: AbortSignal.timeout(5000) 
+    });
+    if (response.ok) {
+      const data = await response.json();
+      geoInfo = {
+        ip: data.ip,
+        country: data.country_name,
+        city: data.city,
+      };
+      // Cache the result
+      localStorage.setItem(GEO_INFO_KEY, JSON.stringify({
+        info: geoInfo,
+        timestamp: Date.now(),
+      }));
+      return geoInfo;
+    }
+  } catch {
+    // Fallback to ip-api.com
+    try {
+      const response = await fetch('http://ip-api.com/json/?fields=query,country,city', {
+        signal: AbortSignal.timeout(5000)
+      });
+      if (response.ok) {
+        const data = await response.json();
+        geoInfo = {
+          ip: data.query,
+          country: data.country,
+          city: data.city,
+        };
+        localStorage.setItem(GEO_INFO_KEY, JSON.stringify({
+          info: geoInfo,
+          timestamp: Date.now(),
+        }));
+        return geoInfo;
+      }
+    } catch {
+      // Ignore errors
+    }
+  }
+  return null;
+}
+
+// =============================================================================
+// BROWSER & OS DETECTION
+// =============================================================================
+
+function getBrowser(): string {
+  const ua = navigator.userAgent;
+  if (ua.includes('Firefox/')) return 'Firefox';
+  if (ua.includes('Edg/')) return 'Edge';
+  if (ua.includes('Chrome/')) return 'Chrome';
+  if (ua.includes('Safari/')) return 'Safari';
+  if (ua.includes('Opera/') || ua.includes('OPR/')) return 'Opera';
+  return 'Unknown';
+}
+
+function getOS(): string {
+  const ua = navigator.userAgent;
+  if (ua.includes('Windows')) return 'Windows';
+  if (ua.includes('Mac OS')) return 'macOS';
+  if (ua.includes('Linux')) return 'Linux';
+  if (ua.includes('Android')) return 'Android';
+  if (ua.includes('iOS') || ua.includes('iPhone') || ua.includes('iPad')) return 'iOS';
+  return 'Unknown';
+}
 
 function loadQueueFromStorage(): void {
   try {
@@ -298,6 +404,12 @@ function createEvent(
     userAgent: navigator.userAgent,
     screenSize: `${window.innerWidth}x${window.innerHeight}`,
     language: navigator.language,
+    ipAddress: geoInfo?.ip,
+    country: geoInfo?.country,
+    city: geoInfo?.city,
+    device: getDeviceType(),
+    browser: getBrowser(),
+    os: getOS(),
   };
 }
 
@@ -523,6 +635,204 @@ export const analytics = {
   },
 
   /**
+   * Get hourly visits data for charts
+   */
+  getHourlyVisits(): { hour: string; visits: number }[] {
+    const hourlyData: Record<number, number> = {};
+    
+    // Initialize all hours
+    for (let i = 0; i < 24; i++) {
+      hourlyData[i] = 0;
+    }
+    
+    // Count page views by hour
+    eventHistory
+      .filter(e => e.type === 'page_view')
+      .forEach(event => {
+        const hour = new Date(event.timestamp).getHours();
+        hourlyData[hour] = (hourlyData[hour] || 0) + 1;
+      });
+    
+    return Object.entries(hourlyData).map(([hour, visits]) => ({
+      hour: `${hour}h`,
+      visits,
+    }));
+  },
+
+  /**
+   * Get daily visits data for charts (last 7 days)
+   */
+  getDailyVisits(): { day: string; visits: number; users: number }[] {
+    const now = new Date();
+    const days: { day: string; visits: number; users: number }[] = [];
+    
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date(now);
+      date.setDate(date.getDate() - i);
+      const dayStart = new Date(date.setHours(0, 0, 0, 0)).getTime();
+      const dayEnd = new Date(date.setHours(23, 59, 59, 999)).getTime();
+      
+      const dayEvents = eventHistory.filter(
+        e => e.timestamp >= dayStart && e.timestamp <= dayEnd
+      );
+      
+      const pageViews = dayEvents.filter(e => e.type === 'page_view').length;
+      const uniqueUsers = new Set(dayEvents.filter(e => e.userId).map(e => e.userId)).size;
+      
+      days.push({
+        day: date.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' }),
+        visits: pageViews,
+        users: uniqueUsers,
+      });
+    }
+    
+    return days;
+  },
+
+  /**
+   * Get page visits ranking
+   */
+  getPageRanking(): { page: string; visits: number }[] {
+    const pageData: Record<string, number> = {};
+    
+    eventHistory
+      .filter(e => e.type === 'page_view')
+      .forEach(event => {
+        const page = event.page || '/';
+        pageData[page] = (pageData[page] || 0) + 1;
+      });
+    
+    return Object.entries(pageData)
+      .map(([page, visits]) => ({ page, visits }))
+      .sort((a, b) => b.visits - a.visits)
+      .slice(0, 10);
+  },
+
+  /**
+   * Get device distribution
+   */
+  getDeviceDistribution(): { device: string; count: number; percentage: number }[] {
+    const deviceData: Record<string, number> = { mobile: 0, tablet: 0, desktop: 0 };
+    
+    eventHistory.forEach(event => {
+      if (event.device) {
+        deviceData[event.device] = (deviceData[event.device] || 0) + 1;
+      }
+    });
+    
+    const total = Object.values(deviceData).reduce((a, b) => a + b, 0) || 1;
+    
+    return Object.entries(deviceData).map(([device, count]) => ({
+      device: device === 'mobile' ? '📱 Mobile' : device === 'tablet' ? '📱 Tablet' : '💻 Desktop',
+      count,
+      percentage: Math.round((count / total) * 100),
+    }));
+  },
+
+  /**
+   * Get browser distribution
+   */
+  getBrowserDistribution(): { browser: string; count: number }[] {
+    const browserData: Record<string, number> = {};
+    
+    eventHistory.forEach(event => {
+      if (event.browser) {
+        browserData[event.browser] = (browserData[event.browser] || 0) + 1;
+      }
+    });
+    
+    return Object.entries(browserData)
+      .map(([browser, count]) => ({ browser, count }))
+      .sort((a, b) => b.count - a.count);
+  },
+
+  /**
+   * Get country distribution
+   */
+  getCountryDistribution(): { country: string; count: number }[] {
+    const countryData: Record<string, number> = {};
+    
+    eventHistory.forEach(event => {
+      const country = event.country || 'Unknown';
+      countryData[country] = (countryData[country] || 0) + 1;
+    });
+    
+    return Object.entries(countryData)
+      .map(([country, count]) => ({ country, count }))
+      .sort((a, b) => b.count - a.count);
+  },
+
+  /**
+   * Get action types distribution for pie chart
+   */
+  getActionDistribution(): { name: string; value: number; color: string }[] {
+    const actionData: Record<string, number> = {};
+    
+    eventHistory.forEach(event => {
+      actionData[event.type] = (actionData[event.type] || 0) + 1;
+    });
+    
+    const colors: Record<string, string> = {
+      page_view: '#3b82f6',
+      click: '#10b981',
+      auth: '#8b5cf6',
+      property: '#f59e0b',
+      message: '#ec4899',
+      search: '#eab308',
+      filter: '#06b6d4',
+      error: '#ef4444',
+      scroll: '#6366f1',
+      engagement: '#14b8a6',
+      navigation: '#84cc16',
+      contract: '#f97316',
+      payment: '#22c55e',
+      feature: '#a855f7',
+    };
+    
+    return Object.entries(actionData)
+      .map(([name, value]) => ({ 
+        name, 
+        value,
+        color: colors[name] || '#6b7280',
+      }))
+      .sort((a, b) => b.value - a.value);
+  },
+
+  /**
+   * Get unique IPs list
+   */
+  getUniqueIPs(): { ip: string; country: string; city: string; visits: number; lastSeen: string }[] {
+    const ipData: Record<string, { country: string; city: string; visits: number; lastSeen: number }> = {};
+    
+    eventHistory.forEach(event => {
+      if (event.ipAddress) {
+        if (!ipData[event.ipAddress]) {
+          ipData[event.ipAddress] = {
+            country: event.country || 'Unknown',
+            city: event.city || 'Unknown',
+            visits: 0,
+            lastSeen: event.timestamp,
+          };
+        }
+        ipData[event.ipAddress].visits++;
+        if (event.timestamp > ipData[event.ipAddress].lastSeen) {
+          ipData[event.ipAddress].lastSeen = event.timestamp;
+        }
+      }
+    });
+    
+    return Object.entries(ipData)
+      .map(([ip, data]) => ({
+        ip,
+        country: data.country,
+        city: data.city,
+        visits: data.visits,
+        lastSeen: new Date(data.lastSeen).toLocaleString('fr-FR'),
+      }))
+      .sort((a, b) => b.visits - a.visits);
+  },
+
+  /**
    * Manually flush events
    */
   flush(): Promise<void> {
@@ -536,8 +846,11 @@ export const analytics = {
     loadQueueFromStorage();
     startFlushTimer();
 
-    // Track initial page view
-    this.pageView();
+    // Fetch geo info first, then track page view
+    fetchGeoInfo().then(() => {
+      // Track initial page view with geo info
+      this.pageView();
+    });
 
     // Flush on page unload
     window.addEventListener('beforeunload', () => {
