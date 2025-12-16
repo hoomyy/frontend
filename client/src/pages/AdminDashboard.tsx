@@ -27,11 +27,51 @@ import { useLanguage } from '@/lib/useLanguage';
 import type { AdminKYC, User, Property } from '@shared/schema';
 import { Skeleton } from '@/components/ui/skeleton';
 import { normalizeImageUrl } from '@/lib/imageUtils';
-import { analytics } from '@/lib/analytics';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend, AreaChart, Area, LineChart, Line
+  PieChart, Pie, Cell, Legend, AreaChart, Area
 } from 'recharts';
+
+// Analytics types from backend
+interface AnalyticsStats {
+  totals: {
+    total_events: string;
+    unique_sessions: string;
+    unique_users: string;
+    unique_ips: string;
+  };
+  eventTypes: { event_type: string; count: string }[];
+  dailyVisits: { day: string; page_views: string; unique_users: string; sessions: string }[];
+  hourlyVisits: { hour: string; visits: string }[];
+  topPages: { page: string; visits: string }[];
+  deviceDistribution: { device: string; count: string }[];
+  browserDistribution: { browser: string; count: string }[];
+  countryDistribution: { country: string; count: string }[];
+  uniqueIPs: { ip: string; country: string; city: string; visits: string; last_seen: string }[];
+  actionSummary: { action_key: string; count: string }[];
+}
+
+interface AnalyticsEvent {
+  id: number;
+  event_type: string;
+  event_category: string;
+  event_action: string;
+  event_label?: string;
+  session_id: string;
+  user_id?: number;
+  user_email?: string;
+  user_first_name?: string;
+  user_last_name?: string;
+  page_url: string;
+  device_type: string;
+  browser: string;
+  os: string;
+  ip_address: string;
+  country?: string;
+  city?: string;
+  metadata?: Record<string, unknown>;
+  created_at: string;
+}
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -198,6 +238,43 @@ export default function AdminDashboard() {
       return apiRequest('GET', `/admin/logs${queryString ? `?${queryString}` : ''}`);
     },
     refetchInterval: 30000,
+  });
+
+  // Analytics queries (ADMIN ONLY)
+  const { data: analyticsStats, isLoading: analyticsStatsLoading, refetch: refetchAnalyticsStats } = useQuery<AnalyticsStats>({
+    queryKey: ['/admin/analytics/stats'],
+    queryFn: async () => {
+      return apiRequest('GET', '/admin/analytics/stats?days=30');
+    },
+    enabled: activeTab === 'analytics',
+    refetchInterval: 30000,
+  });
+
+  const { data: analyticsEvents, isLoading: analyticsEventsLoading, refetch: refetchAnalyticsEvents } = useQuery<{
+    events: AnalyticsEvent[];
+    total: number;
+  }>({
+    queryKey: ['/admin/analytics/events'],
+    queryFn: async () => {
+      return apiRequest('GET', '/admin/analytics/events?limit=50');
+    },
+    enabled: activeTab === 'analytics',
+    refetchInterval: 30000,
+  });
+
+  // Clear analytics mutation
+  const clearAnalyticsMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest('DELETE', '/admin/analytics/clear');
+    },
+    onSuccess: () => {
+      toast({ title: 'Analytics effacées', description: 'Toutes les données ont été supprimées.' });
+      refetchAnalyticsStats();
+      refetchAnalyticsEvents();
+    },
+    onError: () => {
+      toast({ title: 'Erreur', description: 'Impossible de supprimer les analytics.', variant: 'destructive' });
+    },
   });
 
   const filteredProperties = useMemo(() => {
@@ -1222,380 +1299,433 @@ export default function AdminDashboard() {
             </Card>
           </TabsContent>
 
-          {/* ANALYTICS */}
+          {/* ANALYTICS - ADMIN ONLY - Data from backend */}
           <TabsContent value="analytics" className="space-y-6">
-            {/* Stats Overview */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Sessions Uniques</CardTitle>
-                  <Activity className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{analytics.getUniqueSessions()}</div>
-                  <p className="text-xs text-muted-foreground">Dernières 500 actions</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Utilisateurs Trackés</CardTitle>
-                  <Users className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{analytics.getUniqueUsers()}</div>
-                  <p className="text-xs text-muted-foreground">Utilisateurs connectés</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total Événements</CardTitle>
-                  <MousePointer className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{analytics.getHistory().length}</div>
-                  <p className="text-xs text-muted-foreground">Actions trackées</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">IPs Uniques</CardTitle>
-                  <Shield className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{analytics.getUniqueIPs().length}</div>
-                  <p className="text-xs text-muted-foreground">Adresses IP détectées</p>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Charts Row 1 */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Daily Visits Chart */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>📈 Visites des 7 derniers jours</CardTitle>
-                  <CardDescription>Pages vues et utilisateurs uniques par jour</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-[300px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={analytics.getDailyVisits()}>
-                        <defs>
-                          <linearGradient id="colorVisits" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                          </linearGradient>
-                          <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                            <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                        <XAxis dataKey="day" className="text-xs" />
-                        <YAxis className="text-xs" />
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: 'hsl(var(--background))', 
-                            border: '1px solid hsl(var(--border))',
-                            borderRadius: '8px'
-                          }} 
-                        />
-                        <Area type="monotone" dataKey="visits" stroke="#3b82f6" fill="url(#colorVisits)" name="Pages vues" />
-                        <Area type="monotone" dataKey="users" stroke="#10b981" fill="url(#colorUsers)" name="Utilisateurs" />
-                        <Legend />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Hourly Visits Chart */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>🕐 Visites par heure</CardTitle>
-                  <CardDescription>Quand les utilisateurs visitent le site</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-[300px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={analytics.getHourlyVisits()}>
-                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                        <XAxis dataKey="hour" className="text-xs" />
-                        <YAxis className="text-xs" />
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: 'hsl(var(--background))', 
-                            border: '1px solid hsl(var(--border))',
-                            borderRadius: '8px'
-                          }} 
-                        />
-                        <Bar dataKey="visits" fill="#8b5cf6" radius={[4, 4, 0, 0]} name="Visites" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Charts Row 2 */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Device Distribution */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>📱 Appareils</CardTitle>
-                  <CardDescription>Distribution des types d'appareils</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-[250px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={analytics.getDeviceDistribution()}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={60}
-                          outerRadius={80}
-                          dataKey="count"
-                          nameKey="device"
-                          label={({ device, percentage }) => `${device} ${percentage}%`}
-                        >
-                          {analytics.getDeviceDistribution().map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={['#3b82f6', '#10b981', '#f59e0b'][index]} />
-                          ))}
-                        </Pie>
-                        <Tooltip />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Action Types Distribution */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>🎯 Types d'actions</CardTitle>
-                  <CardDescription>Répartition des événements trackés</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-[250px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={analytics.getActionDistribution().slice(0, 6)}
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={80}
-                          dataKey="value"
-                          nameKey="name"
-                          label={({ name }) => name}
-                        >
-                          {analytics.getActionDistribution().slice(0, 6).map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color} />
-                          ))}
-                        </Pie>
-                        <Tooltip />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Browser Distribution */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>🌐 Navigateurs</CardTitle>
-                  <CardDescription>Navigateurs utilisés</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {analytics.getBrowserDistribution().slice(0, 5).map((item, index) => (
-                      <div key={item.browser} className="flex items-center gap-3">
-                        <div className="w-20 text-sm font-medium">{item.browser}</div>
-                        <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden">
-                          <div 
-                            className="h-full rounded-full transition-all"
-                            style={{ 
-                              width: `${(item.count / (analytics.getBrowserDistribution()[0]?.count || 1)) * 100}%`,
-                              backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'][index]
-                            }}
-                          />
-                        </div>
-                        <div className="w-12 text-sm text-right text-muted-foreground">{item.count}</div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Top Pages & Countries */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Top Pages */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>📄 Pages les plus visitées</CardTitle>
-                  <CardDescription>Classement des pages par nombre de vues</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    {analytics.getPageRanking().map((item, index) => (
-                      <div key={item.page} className="flex items-center gap-3 p-2 bg-muted/50 rounded-lg">
-                        <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold">
-                          {index + 1}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{item.page}</p>
-                        </div>
-                        <Badge variant="secondary">{item.visits} vues</Badge>
-                      </div>
-                    ))}
-                    {analytics.getPageRanking().length === 0 && (
-                      <p className="text-center text-muted-foreground py-4">Aucune donnée</p>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Countries */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>🌍 Pays des visiteurs</CardTitle>
-                  <CardDescription>Origine géographique des utilisateurs</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    {analytics.getCountryDistribution().slice(0, 8).map((item, index) => (
-                      <div key={item.country} className="flex items-center gap-3 p-2 bg-muted/50 rounded-lg">
-                        <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold">
-                          {index + 1}
-                        </div>
-                        <div className="flex-1">
-                          <p className="text-sm font-medium">{item.country}</p>
-                        </div>
-                        <Badge variant="outline">{item.count}</Badge>
-                      </div>
-                    ))}
-                    {analytics.getCountryDistribution().length === 0 && (
-                      <p className="text-center text-muted-foreground py-4">Aucune donnée géographique</p>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* IP Addresses Table */}
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle>🔒 Adresses IP</CardTitle>
-                  <CardDescription>Liste des IPs uniques avec localisation</CardDescription>
+            {analyticsStatsLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <span className="ml-2">Chargement des analytics...</span>
+              </div>
+            ) : (
+              <>
+                {/* Stats Overview */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Sessions Uniques</CardTitle>
+                      <Activity className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">{analyticsStats?.totals?.unique_sessions || 0}</div>
+                      <p className="text-xs text-muted-foreground">30 derniers jours</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Utilisateurs Trackés</CardTitle>
+                      <Users className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">{analyticsStats?.totals?.unique_users || 0}</div>
+                      <p className="text-xs text-muted-foreground">Utilisateurs connectés</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Total Événements</CardTitle>
+                      <MousePointer className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">{analyticsStats?.totals?.total_events || 0}</div>
+                      <p className="text-xs text-muted-foreground">Actions trackées</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">IPs Uniques</CardTitle>
+                      <Shield className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">{analyticsStats?.totals?.unique_ips || 0}</div>
+                      <p className="text-xs text-muted-foreground">Adresses IP détectées</p>
+                    </CardContent>
+                  </Card>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => {
-                  analytics.clearHistory();
-                  toast({ title: 'Historique effacé', description: 'Les données analytics ont été supprimées.' });
-                }}>
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Effacer tout
-                </Button>
-              </CardHeader>
-              <CardContent>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left p-2 font-medium">IP</th>
-                        <th className="text-left p-2 font-medium">Pays</th>
-                        <th className="text-left p-2 font-medium">Ville</th>
-                        <th className="text-right p-2 font-medium">Visites</th>
-                        <th className="text-right p-2 font-medium">Dernière visite</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {analytics.getUniqueIPs().slice(0, 20).map((item) => (
-                        <tr key={item.ip} className="border-b hover:bg-muted/50">
-                          <td className="p-2 font-mono text-xs">{item.ip}</td>
-                          <td className="p-2">{item.country}</td>
-                          <td className="p-2">{item.city}</td>
-                          <td className="p-2 text-right">
-                            <Badge variant="secondary">{item.visits}</Badge>
-                          </td>
-                          <td className="p-2 text-right text-muted-foreground text-xs">{item.lastSeen}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {analytics.getUniqueIPs().length === 0 && (
-                    <p className="text-center text-muted-foreground py-8">Aucune adresse IP enregistrée</p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
 
-            {/* Recent Events */}
-            <Card>
-              <CardHeader>
-                <CardTitle>⚡ Derniers Événements</CardTitle>
-                <CardDescription>Historique en temps réel des actions utilisateurs</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                  {analytics.getHistory().slice(0, 30).map((event, index) => {
-                    const getEventIcon = () => {
-                      switch(event.type) {
-                        case 'page_view': return <Eye className="h-4 w-4 text-blue-500" />;
-                        case 'click': return <MousePointer className="h-4 w-4 text-green-500" />;
-                        case 'auth': return <LogIn className="h-4 w-4 text-purple-500" />;
-                        case 'property': return <Home className="h-4 w-4 text-orange-500" />;
-                        case 'message': return <MessageSquare className="h-4 w-4 text-pink-500" />;
-                        case 'search': return <Search className="h-4 w-4 text-yellow-500" />;
-                        case 'filter': return <Filter className="h-4 w-4 text-cyan-500" />;
-                        case 'error': return <AlertTriangle className="h-4 w-4 text-red-500" />;
-                        default: return <Activity className="h-4 w-4 text-gray-500" />;
-                      }
-                    };
-                    
-                    return (
-                      <div key={`${event.timestamp}-${index}`} className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg hover:bg-muted transition-colors">
-                        <div className="mt-0.5">{getEventIcon()}</div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-medium text-sm">{event.action}</span>
-                            <Badge variant="outline" className="text-xs">{event.type}</Badge>
-                            {event.ipAddress && (
-                              <Badge variant="secondary" className="text-xs font-mono">{event.ipAddress}</Badge>
-                            )}
-                          </div>
-                          <div className="flex flex-wrap gap-2 mt-1 text-xs text-muted-foreground">
-                            <span>{event.page}</span>
-                            {event.userId && <span>• User #{event.userId}</span>}
-                            {event.country && <span>• {event.country}</span>}
-                            {event.city && <span>({event.city})</span>}
-                            <span>• {event.device}</span>
-                            <span>• {event.browser}</span>
-                            <span>• {new Date(event.timestamp).toLocaleString('fr-FR')}</span>
-                          </div>
-                          {event.metadata && Object.keys(event.metadata).length > 0 && (
-                            <details className="mt-2">
-                              <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
-                                Détails
-                              </summary>
-                              <pre className="mt-1 text-xs bg-background p-2 rounded overflow-auto max-w-full">
-                                {JSON.stringify(event.metadata, null, 2)}
-                              </pre>
-                            </details>
-                          )}
-                        </div>
+                {/* Charts Row 1 */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Daily Visits Chart */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>📈 Visites journalières</CardTitle>
+                      <CardDescription>Pages vues et utilisateurs par jour</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-[300px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={(analyticsStats?.dailyVisits || []).map(d => ({
+                            day: new Date(d.day).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' }),
+                            visits: parseInt(d.page_views) || 0,
+                            users: parseInt(d.unique_users) || 0,
+                          }))}>
+                            <defs>
+                              <linearGradient id="colorVisits" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                              </linearGradient>
+                              <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                                <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                            <XAxis dataKey="day" className="text-xs" />
+                            <YAxis className="text-xs" />
+                            <Tooltip 
+                              contentStyle={{ 
+                                backgroundColor: 'hsl(var(--background))', 
+                                border: '1px solid hsl(var(--border))',
+                                borderRadius: '8px'
+                              }} 
+                            />
+                            <Area type="monotone" dataKey="visits" stroke="#3b82f6" fill="url(#colorVisits)" name="Pages vues" />
+                            <Area type="monotone" dataKey="users" stroke="#10b981" fill="url(#colorUsers)" name="Utilisateurs" />
+                            <Legend />
+                          </AreaChart>
+                        </ResponsiveContainer>
                       </div>
-                    );
-                  })}
-                  {analytics.getHistory().length === 0 && (
-                    <div className="text-center py-8 text-muted-foreground">
-                      Aucun événement enregistré pour le moment
+                    </CardContent>
+                  </Card>
+
+                  {/* Hourly Visits Chart */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>🕐 Visites par heure</CardTitle>
+                      <CardDescription>Quand les utilisateurs visitent le site</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-[300px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={(analyticsStats?.hourlyVisits || []).map(d => ({
+                            hour: `${d.hour}h`,
+                            visits: parseInt(d.visits) || 0,
+                          }))}>
+                            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                            <XAxis dataKey="hour" className="text-xs" />
+                            <YAxis className="text-xs" />
+                            <Tooltip 
+                              contentStyle={{ 
+                                backgroundColor: 'hsl(var(--background))', 
+                                border: '1px solid hsl(var(--border))',
+                                borderRadius: '8px'
+                              }} 
+                            />
+                            <Bar dataKey="visits" fill="#8b5cf6" radius={[4, 4, 0, 0]} name="Visites" />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Charts Row 2 */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Device Distribution */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>📱 Appareils</CardTitle>
+                      <CardDescription>Distribution des types d'appareils</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-[250px]">
+                        {(analyticsStats?.deviceDistribution || []).length > 0 ? (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={(analyticsStats?.deviceDistribution || []).map(d => ({
+                                  device: d.device === 'mobile' ? '📱 Mobile' : d.device === 'tablet' ? '📱 Tablet' : '💻 Desktop',
+                                  count: parseInt(d.count) || 0,
+                                }))}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={60}
+                                outerRadius={80}
+                                dataKey="count"
+                                nameKey="device"
+                                label={({ device, count }) => `${device} (${count})`}
+                              >
+                                {(analyticsStats?.deviceDistribution || []).map((_, index) => (
+                                  <Cell key={`cell-${index}`} fill={['#3b82f6', '#10b981', '#f59e0b'][index % 3]} />
+                                ))}
+                              </Pie>
+                              <Tooltip />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="flex items-center justify-center h-full text-muted-foreground">
+                            Aucune donnée
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Action Types Distribution */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>🎯 Types d'événements</CardTitle>
+                      <CardDescription>Répartition des événements</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-[250px]">
+                        {(analyticsStats?.eventTypes || []).length > 0 ? (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={(analyticsStats?.eventTypes || []).slice(0, 6).map(d => ({
+                                  name: d.event_type,
+                                  value: parseInt(d.count) || 0,
+                                }))}
+                                cx="50%"
+                                cy="50%"
+                                outerRadius={80}
+                                dataKey="value"
+                                nameKey="name"
+                                label={({ name }) => name}
+                              >
+                                {(analyticsStats?.eventTypes || []).slice(0, 6).map((_, index) => (
+                                  <Cell key={`cell-${index}`} fill={['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'][index % 6]} />
+                                ))}
+                              </Pie>
+                              <Tooltip />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="flex items-center justify-center h-full text-muted-foreground">
+                            Aucune donnée
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Browser Distribution */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>🌐 Navigateurs</CardTitle>
+                      <CardDescription>Navigateurs utilisés</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        {(analyticsStats?.browserDistribution || []).slice(0, 5).map((item, index) => (
+                          <div key={item.browser} className="flex items-center gap-3">
+                            <div className="w-20 text-sm font-medium">{item.browser || 'Unknown'}</div>
+                            <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden">
+                              <div 
+                                className="h-full rounded-full transition-all"
+                                style={{ 
+                                  width: `${(parseInt(item.count) / (parseInt(analyticsStats?.browserDistribution?.[0]?.count) || 1)) * 100}%`,
+                                  backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'][index]
+                                }}
+                              />
+                            </div>
+                            <div className="w-12 text-sm text-right text-muted-foreground">{item.count}</div>
+                          </div>
+                        ))}
+                        {(analyticsStats?.browserDistribution || []).length === 0 && (
+                          <p className="text-center text-muted-foreground py-4">Aucune donnée</p>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Top Pages & Countries */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Top Pages */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>📄 Pages les plus visitées</CardTitle>
+                      <CardDescription>Classement des pages par nombre de vues</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        {(analyticsStats?.topPages || []).map((item, index) => (
+                          <div key={item.page} className="flex items-center gap-3 p-2 bg-muted/50 rounded-lg">
+                            <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold">
+                              {index + 1}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{item.page}</p>
+                            </div>
+                            <Badge variant="secondary">{item.visits} vues</Badge>
+                          </div>
+                        ))}
+                        {(analyticsStats?.topPages || []).length === 0 && (
+                          <p className="text-center text-muted-foreground py-4">Aucune donnée</p>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Countries */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>🌍 Pays des visiteurs</CardTitle>
+                      <CardDescription>Origine géographique des utilisateurs</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        {(analyticsStats?.countryDistribution || []).slice(0, 8).map((item, index) => (
+                          <div key={item.country} className="flex items-center gap-3 p-2 bg-muted/50 rounded-lg">
+                            <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold">
+                              {index + 1}
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-sm font-medium">{item.country || 'Unknown'}</p>
+                            </div>
+                            <Badge variant="outline">{item.count}</Badge>
+                          </div>
+                        ))}
+                        {(analyticsStats?.countryDistribution || []).length === 0 && (
+                          <p className="text-center text-muted-foreground py-4">Aucune donnée géographique</p>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* IP Addresses Table */}
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between">
+                    <div>
+                      <CardTitle>🔒 Adresses IP</CardTitle>
+                      <CardDescription>Liste des IPs uniques avec localisation (ADMIN ONLY)</CardDescription>
                     </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+                    <Button 
+                      variant="destructive" 
+                      size="sm" 
+                      onClick={() => clearAnalyticsMutation.mutate()}
+                      disabled={clearAnalyticsMutation.isPending}
+                    >
+                      {clearAnalyticsMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4 mr-2" />
+                      )}
+                      Effacer tout
+                    </Button>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="text-left p-2 font-medium">IP</th>
+                            <th className="text-left p-2 font-medium">Pays</th>
+                            <th className="text-left p-2 font-medium">Ville</th>
+                            <th className="text-right p-2 font-medium">Visites</th>
+                            <th className="text-right p-2 font-medium">Dernière visite</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(analyticsStats?.uniqueIPs || []).slice(0, 30).map((item) => (
+                            <tr key={item.ip} className="border-b hover:bg-muted/50">
+                              <td className="p-2 font-mono text-xs">{item.ip}</td>
+                              <td className="p-2">{item.country || '-'}</td>
+                              <td className="p-2">{item.city || '-'}</td>
+                              <td className="p-2 text-right">
+                                <Badge variant="secondary">{item.visits}</Badge>
+                              </td>
+                              <td className="p-2 text-right text-muted-foreground text-xs">
+                                {new Date(item.last_seen).toLocaleString('fr-FR')}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      {(analyticsStats?.uniqueIPs || []).length === 0 && (
+                        <p className="text-center text-muted-foreground py-8">Aucune adresse IP enregistrée</p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Recent Events */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>⚡ Derniers Événements</CardTitle>
+                    <CardDescription>Historique en temps réel - Données de TOUS les utilisateurs</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {analyticsEventsLoading ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-6 w-6 animate-spin" />
+                      </div>
+                    ) : (
+                      <div className="space-y-2 max-h-[500px] overflow-y-auto">
+                        {(analyticsEvents?.events || []).map((event) => {
+                          const getEventIcon = () => {
+                            switch(event.event_type) {
+                              case 'page_view': return <Eye className="h-4 w-4 text-blue-500" />;
+                              case 'click': return <MousePointer className="h-4 w-4 text-green-500" />;
+                              case 'auth': return <LogIn className="h-4 w-4 text-purple-500" />;
+                              case 'property': return <Home className="h-4 w-4 text-orange-500" />;
+                              case 'message': return <MessageSquare className="h-4 w-4 text-pink-500" />;
+                              case 'search': return <Search className="h-4 w-4 text-yellow-500" />;
+                              case 'filter': return <Filter className="h-4 w-4 text-cyan-500" />;
+                              case 'error': return <AlertTriangle className="h-4 w-4 text-red-500" />;
+                              default: return <Activity className="h-4 w-4 text-gray-500" />;
+                            }
+                          };
+                          
+                          return (
+                            <div key={event.id} className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg hover:bg-muted transition-colors">
+                              <div className="mt-0.5">{getEventIcon()}</div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-medium text-sm">{event.event_action}</span>
+                                  <Badge variant="outline" className="text-xs">{event.event_type}</Badge>
+                                  {event.ip_address && (
+                                    <Badge variant="secondary" className="text-xs font-mono">{event.ip_address}</Badge>
+                                  )}
+                                </div>
+                                <div className="flex flex-wrap gap-2 mt-1 text-xs text-muted-foreground">
+                                  <span>{event.page_url || '/'}</span>
+                                  {event.user_id && (
+                                    <span>• User #{event.user_id} ({event.user_first_name} {event.user_last_name})</span>
+                                  )}
+                                  {event.country && <span>• {event.country}</span>}
+                                  {event.city && <span>({event.city})</span>}
+                                  {event.device_type && <span>• {event.device_type}</span>}
+                                  {event.browser && <span>• {event.browser}</span>}
+                                  <span>• {new Date(event.created_at).toLocaleString('fr-FR')}</span>
+                                </div>
+                                {event.metadata && Object.keys(event.metadata).length > 0 && (
+                                  <details className="mt-2">
+                                    <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
+                                      Détails
+                                    </summary>
+                                    <pre className="mt-1 text-xs bg-background p-2 rounded overflow-auto max-w-full">
+                                      {JSON.stringify(event.metadata, null, 2)}
+                                    </pre>
+                                  </details>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {(analyticsEvents?.events || []).length === 0 && (
+                          <div className="text-center py-8 text-muted-foreground">
+                            Aucun événement enregistré pour le moment
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </>
+            )}
           </TabsContent>
         </Tabs>
 

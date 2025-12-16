@@ -311,12 +311,11 @@ async function flushEvents(): Promise<void> {
   saveQueueToStorage();
 
   try {
-    const token = getAuthToken();
-    const response = await fetch(`${getAPIBaseURL()}/analytics/events`, {
+    // Send to admin analytics endpoint (accepts from anyone, but only admin can VIEW)
+    const response = await fetch(`${getAPIBaseURL()}/admin/analytics/events`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: JSON.stringify({ events: eventsToSend }),
     });
