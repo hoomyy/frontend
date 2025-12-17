@@ -1585,6 +1585,53 @@ export default function CGU() {
                     <li>LocalStorage et SessionStorage HTML5</li>
                     <li>Fingerprinting léger (résolution écran, fuseau horaire) à des fins anti-fraude uniquement</li>
                   </ul>
+
+                  <h3 className="text-base sm:text-xl md:text-2xl font-semibold mb-2 sm:mb-3 md:mb-4 leading-tight">29.4 Analyse Comportementale et Suivi d'Utilisation</h3>
+                  <p className="mb-3 sm:mb-4 text-sm md:text-base leading-relaxed">
+                    Afin d'améliorer continuellement la qualité de nos services et l'expérience utilisateur, Hoomy collecte et analyse automatiquement des données relatives à votre utilisation de la Plateforme :
+                  </p>
+                  
+                  <h4 className="text-lg md:text-xl font-semibold mb-3">A) Données de Navigation Collectées</h4>
+                  <ul className="list-disc list-inside space-y-1 mb-4 text-sm md:text-base ml-4">
+                    <li>Pages visitées et parcours de navigation</li>
+                    <li>Durée de visite et temps passé par page</li>
+                    <li>Profondeur de défilement (scroll depth)</li>
+                    <li>Clics et interactions avec les éléments de l'interface</li>
+                    <li>Recherches effectuées et filtres appliqués</li>
+                    <li>Actions sur les annonces (consultation, favoris, contact)</li>
+                  </ul>
+
+                  <h4 className="text-lg md:text-xl font-semibold mb-3">B) Données Techniques Collectées</h4>
+                  <ul className="list-disc list-inside space-y-1 mb-4 text-sm md:text-base ml-4">
+                    <li>Adresse IP et localisation géographique approximative (pays, ville)</li>
+                    <li>Type d'appareil (mobile, tablette, ordinateur)</li>
+                    <li>Système d'exploitation et version du navigateur</li>
+                    <li>Résolution d'écran et langue du navigateur</li>
+                    <li>Page de référence (referrer) et source d'acquisition</li>
+                    <li>Identifiant de session anonymisé</li>
+                  </ul>
+
+                  <h4 className="text-lg md:text-xl font-semibold mb-3">C) Finalités du Traitement</h4>
+                  <ul className="list-disc list-inside space-y-1 mb-4 text-sm md:text-base ml-4">
+                    <li>Amélioration de l'ergonomie et de l'expérience utilisateur</li>
+                    <li>Optimisation des performances techniques de la Plateforme</li>
+                    <li>Analyse statistique anonymisée de l'audience</li>
+                    <li>Détection et prévention des comportements frauduleux</li>
+                    <li>Personnalisation des recommandations de logements</li>
+                    <li>Mesure de l'efficacité des fonctionnalités</li>
+                  </ul>
+
+                  <h4 className="text-lg md:text-xl font-semibold mb-3">D) Base Légale et Conservation</h4>
+                  <ul className="list-disc list-inside space-y-1 mb-4 text-sm md:text-base ml-4">
+                    <li><strong>Base légale :</strong> Intérêt légitime (art. 6.1.f RGPD) pour l'amélioration des services et la sécurité</li>
+                    <li><strong>Durée de conservation :</strong> 13 mois maximum pour les données brutes, agrégées ensuite de manière anonyme</li>
+                    <li><strong>Accès :</strong> Données accessibles uniquement aux administrateurs autorisés de Hoomy</li>
+                    <li><strong>Transfert :</strong> Aucun transfert à des tiers à des fins commerciales</li>
+                  </ul>
+
+                  <div className="bg-muted border-l-4 border-border p-4 rounded-lg text-sm md:text-base italic mb-4">
+                    <strong>Information :</strong> L'utilisation de la Plateforme implique l'acceptation de cette collecte de données à des fins d'amélioration du service. Ces données sont traitées de manière sécurisée et ne sont jamais vendues à des tiers.
+                  </div>
                 </CardContent>
               </Card>
             </section>
