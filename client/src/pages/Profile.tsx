@@ -28,7 +28,7 @@ import { KYCVerification } from '@/components/KYCVerification';
 import type { StripeAccountStatus } from '@shared/schema';
 
 export default function Profile() {
-  const { user, isAuthenticated, refreshUser, isOwner } = useAuth();
+  const { user, isAuthenticated, refreshUser, isOwner, isStudent } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { t } = useLanguage();
@@ -41,14 +41,14 @@ export default function Profile() {
   const [cropDialogOpen, setCropDialogOpen] = useState(false);
   const [selectedImageSrc, setSelectedImageSrc] = useState<string | null>(null);
 
-  // Query Stripe status for owners
+  // Query Stripe status for owners and students
   const { data: stripeStatus } = useQuery<StripeAccountStatus>({
     queryKey: ['/contracts/connect/account-status'],
     queryFn: async () => {
       try {
         return await apiRequest<StripeAccountStatus>('GET', '/contracts/connect/account-status');
       } catch (error: any) {
-        // If user is not owner, API will return error - return null instead of throwing
+        // If user doesn't have account, API will return - return null instead of throwing
         if (error?.status === 403 || error?.status === 404) {
           return null;
         }
@@ -58,7 +58,7 @@ export default function Profile() {
     enabled: isAuthenticated,
     staleTime: 1000 * 60 * 10,
     gcTime: 1000 * 60 * 30,
-    retry: false, // Don't retry if user is not owner (will get 403/404)
+    retry: false,
   });
 
   // Stripe setup mutations
@@ -111,10 +111,11 @@ export default function Profile() {
   });
 
   const handleStripeSetup = async () => {
-    if (!isOwner) {
+    // Allow both owners and students to set up Stripe Connect
+    if (!isOwner && !isStudent) {
       toast({
         title: 'Action non autorisée',
-        description: 'La configuration Stripe est uniquement disponible pour les propriétaires.',
+        description: 'La configuration Stripe est uniquement disponible pour les propriétaires et les étudiants.',
         variant: 'destructive',
       });
       return;

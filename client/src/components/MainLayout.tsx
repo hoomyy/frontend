@@ -41,13 +41,13 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
     retry: 1,
   });
 
-  // Query Stripe status for owners only
+  // Query Stripe status for owners and students
   const { data: stripeStatus } = useQuery<StripeAccountStatus>({
     queryKey: ['/contracts/connect/account-status'],
     queryFn: async () => {
       return apiRequest<StripeAccountStatus>('GET', '/contracts/connect/account-status');
     },
-    enabled: isAuthenticated && isOwner,
+    enabled: isAuthenticated && (isOwner || isStudent),
     staleTime: 1000 * 60 * 10,
     gcTime: 1000 * 60 * 30,
   });
@@ -92,8 +92,8 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
   // Check if KYC is not approved
   const kycNotApproved = kycStatus && kycStatus.status !== 'approved';
   
-  // Check if Stripe is not configured (only show if KYC is approved)
-  const stripeNotConfigured = isOwner && kycStatus?.status === 'approved' && stripeStatus && !stripeStatus.onboarding_complete;
+  // Check if Stripe is not configured (only show if KYC is approved, for owners and students)
+  const stripeNotConfigured = (isOwner || isStudent) && kycStatus?.status === 'approved' && stripeStatus && !stripeStatus.onboarding_complete;
 
   // Utiliser la fonction helper pour gérer les utilisateurs supprimés
 
