@@ -21,8 +21,16 @@ export default function Login() {
   const [error, setError] = useState<string>('');
 
   // Rediriger si déjà connecté (pour les utilisateurs qui arrivent directement sur /login)
+  // Utiliser un ref pour éviter les boucles de redirection
+  const hasRedirectedRef = useRef(false);
+  
   useEffect(() => {
+    // Éviter les boucles de redirection
+    if (hasRedirectedRef.current) return;
+    
+    // Si authentifié ET utilisateur existe, rediriger
     if (isAuthenticated && user) {
+      hasRedirectedRef.current = true;
       let redirectPath = '/dashboard/owner';
       if (user.role === 'admin') {
         redirectPath = '/admin/dashboard';
@@ -31,6 +39,14 @@ export default function Login() {
       }
       // Utiliser window.location pour forcer la redirection
       window.location.href = redirectPath;
+    } else if (isAuthenticated && !user) {
+      // Si authentifié mais pas d'utilisateur, c'est un problème
+      // Nettoyer le token invalide et rester sur la page de login
+      console.warn('Token exists but user is null - clearing invalid session');
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('auth_user');
+      sessionStorage.removeItem('auth_session');
+      // Ne pas rediriger, laisser l'utilisateur se reconnecter
     }
   }, [isAuthenticated, user]);
 

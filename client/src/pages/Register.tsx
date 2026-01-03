@@ -37,8 +37,16 @@ export default function Register() {
   };
 
   // Rediriger si déjà connecté
+  // Utiliser un ref pour éviter les boucles
+  const hasRedirectedRef = useRef(false);
+  
   useEffect(() => {
+    // Éviter les boucles de redirection
+    if (hasRedirectedRef.current) return;
+    
+    // Si authentifié ET utilisateur existe, rediriger
     if (isAuthenticated && user) {
+      hasRedirectedRef.current = true;
       if (user.role === 'admin') {
         setLocation('/admin/dashboard');
       } else if (user.role === 'student') {
@@ -46,6 +54,13 @@ export default function Register() {
       } else {
         setLocation('/dashboard/owner');
       }
+    } else if (isAuthenticated && !user) {
+      // Si authentifié mais pas d'utilisateur, nettoyer et rester sur register
+      console.warn('Token exists but user is null - clearing invalid session');
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('auth_user');
+      sessionStorage.removeItem('auth_session');
+      // Ne pas rediriger, laisser l'utilisateur s'inscrire
     }
   }, [isAuthenticated, user, setLocation]);
 
