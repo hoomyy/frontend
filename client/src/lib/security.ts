@@ -134,6 +134,8 @@ export function isTrustedUrl(url: string): boolean {
     'hoomy.site',
     'backend.hoomy.site',
     'api.stripe.com',
+    'connect.stripe.com',
+    'checkout.stripe.com',
     'fonts.googleapis.com',
     'fonts.gstatic.com',
     'images.unsplash.com',
@@ -157,7 +159,19 @@ export function isTrustedUrl(url: string): boolean {
 export function safeRedirect(url: string, fallback: string = '/'): void {
   const sanitized = sanitizeUrl(url);
   if (sanitized && (isTrustedUrl(url) || url.startsWith('/'))) {
-    window.location.href = sanitized;
+    // Pour les URLs Stripe (connect.stripe.com), utiliser window.location.replace
+    // pour éviter les problèmes de sécurité avec localhost
+    if (url.includes('stripe.com') || url.includes('connect.stripe.com')) {
+      try {
+        window.location.replace(sanitized);
+      } catch (error) {
+        // Si replace échoue (contexte non sécurisé), utiliser open dans une nouvelle fenêtre
+        console.warn('Cannot redirect to Stripe URL, opening in new window:', error);
+        window.open(sanitized, '_blank', 'noopener,noreferrer');
+      }
+    } else {
+      window.location.href = sanitized;
+    }
   } else {
     reportSecurityViolation('unsafe_redirect', { url, sanitized });
     window.location.href = fallback;

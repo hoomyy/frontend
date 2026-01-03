@@ -130,12 +130,43 @@ export default function Profile() {
     }
   };
 
+  // Utiliser un ref pour éviter les boucles de redirection
+  const hasTriedRefresh = useRef(false);
+  const redirectingRef = useRef(false);
+
   useEffect(() => {
+    // Éviter les boucles de redirection
+    if (redirectingRef.current) return;
+    
     if (!isAuthenticated) {
+      redirectingRef.current = true;
       setLocation('/login');
       return;
     }
-  }, [isAuthenticated, setLocation]);
+    
+    // Si authentifié mais pas d'utilisateur, essayer de rafraîchir UNE SEULE FOIS
+    if (isAuthenticated && !user && !hasTriedRefresh.current) {
+      hasTriedRefresh.current = true;
+      refreshUser()
+        .then(() => {
+          // Si le refresh réussit, reset le flag pour permettre un nouveau refresh si nécessaire
+          hasTriedRefresh.current = false;
+        })
+        .catch((error) => {
+          // Si le refresh échoue (utilisateur n'existe pas en DB), rediriger vers login
+          console.error('Failed to refresh user, redirecting to login:', error);
+          redirectingRef.current = true;
+          // Nettoyer le token invalide
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('auth_user');
+          setLocation('/login');
+        });
+    } else if (isAuthenticated && user) {
+      // Reset les flags si l'utilisateur est chargé
+      hasTriedRefresh.current = false;
+      redirectingRef.current = false;
+    }
+  }, [isAuthenticated, user, setLocation, refreshUser]);
 
   const updateProfileMutation = useMutation({
     mutationFn: (data: { first_name?: string; last_name?: string; email?: string; phone?: string; current_password?: string; new_password?: string; profile_picture?: string }) =>
