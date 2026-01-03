@@ -378,12 +378,13 @@ export default function Profile() {
               onSetup={handleStripeSetup}
               isLoading={createAccountMutation.isPending || createOnboardingLinkMutation.isPending}
               isOwner={isOwner}
+              isStudent={isStudent}
             />
           </CardContent>
         </Card>
 
         {/* Yellow Warning Alert for Stripe Configuration */}
-        {isOwner && stripeStatus && !stripeStatus.onboarding_complete && (
+        {(isOwner || isStudent) && stripeStatus && !stripeStatus.onboarding_complete && (
           <Alert className="mt-6 border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20">
             <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
             <AlertDescription className="text-yellow-800 dark:text-yellow-200">
@@ -665,19 +666,21 @@ function StripeConfiguration({
   stripeStatus, 
   onSetup, 
   isLoading,
-  isOwner
+  isOwner,
+  isStudent
 }: { 
   stripeStatus: StripeAccountStatus | undefined; 
   onSetup: () => void; 
   isLoading: boolean;
   isOwner: boolean;
+  isStudent: boolean;
 }) {
   const { t } = useLanguage();
   const isConfigured = stripeStatus?.onboarding_complete;
   const hasAccount = stripeStatus?.has_account;
 
-  // If not owner, show info message
-  if (!isOwner) {
+  // If not owner or student, show info message
+  if (!isOwner && !isStudent) {
     return (
       <Card>
         <CardHeader>
@@ -685,7 +688,7 @@ function StripeConfiguration({
             <div>
               <CardTitle>Configuration Stripe</CardTitle>
               <CardDescription>
-                Configuration Stripe disponible uniquement pour les propriétaires
+                Configuration Stripe disponible uniquement pour les propriétaires et les étudiants
               </CardDescription>
             </div>
             <Badge variant="outline" className="gap-1">
@@ -697,8 +700,8 @@ function StripeConfiguration({
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              La configuration Stripe est uniquement disponible pour les comptes propriétaires. 
-              Si vous souhaitez devenir propriétaire, veuillez créer un compte propriétaire.
+              La configuration Stripe est uniquement disponible pour les comptes propriétaires et étudiants. 
+              Si vous souhaitez utiliser cette fonctionnalité, veuillez créer un compte propriétaire ou étudiant.
             </AlertDescription>
           </Alert>
         </CardContent>
