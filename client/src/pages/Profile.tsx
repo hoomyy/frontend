@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'wouter';
 import { User, Camera, Phone, CheckCircle2, AlertTriangle, Mail, Lock, CreditCard, AlertCircle } from 'lucide-react';
 import { MainLayout } from '@/components/MainLayout';
