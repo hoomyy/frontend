@@ -23,15 +23,15 @@ interface PaymentMethodManagerProps {
 }
 
 export function PaymentMethodManager({ onPaymentMethodAdded, showAddButton = true }: PaymentMethodManagerProps) {
-  const { user, isOwner } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [saveForFuture, setSaveForFuture] = useState(true);
 
-  // Fetch payment methods
+  // Fetch payment methods for all authenticated users (owners and students)
   const { data: paymentMethods, isLoading } = useQuery<PaymentMethod[]>({
     queryKey: ['/payment-methods'],
-    enabled: isOwner,
+    enabled: isAuthenticated,
     queryFn: async () => {
       return apiRequest<PaymentMethod[]>('GET', '/payment-methods');
     },
@@ -141,9 +141,7 @@ export function PaymentMethodManager({ onPaymentMethodAdded, showAddButton = tru
     },
   });
 
-  if (!isOwner) {
-    return null;
-  }
+  // Component is now available for all authenticated users
 
   const handleAddPaymentMethod = () => {
     createSetupIntentMutation.mutate();
@@ -156,7 +154,7 @@ export function PaymentMethodManager({ onPaymentMethodAdded, showAddButton = tru
           <div>
             <CardTitle>Méthodes de paiement</CardTitle>
             <CardDescription>
-              Gérez vos cartes bancaires pour les paiements de commission
+              Gérez vos cartes bancaires pour les paiements
             </CardDescription>
           </div>
           {showAddButton && (

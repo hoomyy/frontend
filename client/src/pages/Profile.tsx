@@ -42,14 +42,14 @@ export default function Profile() {
   const [cropDialogOpen, setCropDialogOpen] = useState(false);
   const [selectedImageSrc, setSelectedImageSrc] = useState<string | null>(null);
 
-  // Query Stripe status for owners
+  // Query Stripe status for all authenticated users (owners and students)
   const { data: stripeStatus } = useQuery<StripeAccountStatus>({
     queryKey: ['/contracts/connect/account-status'],
     queryFn: async () => {
       try {
         return await apiRequest<StripeAccountStatus>('GET', '/contracts/connect/account-status');
       } catch (error: any) {
-        // If user is not owner, API will return error - return null instead of throwing
+        // If API returns error, return null instead of throwing
         if (error?.status === 403 || error?.status === 404) {
           return null;
         }
@@ -59,7 +59,7 @@ export default function Profile() {
     enabled: isAuthenticated,
     staleTime: 1000 * 60 * 10,
     gcTime: 1000 * 60 * 30,
-    retry: false, // Don't retry if user is not owner (will get 403/404)
+    retry: false,
   });
 
   // Stripe setup mutations
@@ -112,14 +112,6 @@ export default function Profile() {
   });
 
   const handleStripeSetup = async () => {
-    if (!isOwner) {
-      toast({
-        title: 'Action non autorisée',
-        description: 'La configuration Stripe est uniquement disponible pour les propriétaires.',
-        variant: 'destructive',
-      });
-      return;
-    }
     try {
       if (!stripeStatus?.has_account) {
         await createAccountMutation.mutateAsync();
@@ -372,12 +364,8 @@ export default function Profile() {
             <KYCVerification />
 
             {/* Payment Methods Section */}
-            {isOwner && (
-              <>
-                <Separator />
-                <PaymentMethodManager />
-              </>
-            )}
+            <Separator />
+            <PaymentMethodManager />
 
             {/* Stripe Configuration Section */}
             <Separator />
@@ -385,13 +373,13 @@ export default function Profile() {
               stripeStatus={stripeStatus}
               onSetup={handleStripeSetup}
               isLoading={createAccountMutation.isPending || createOnboardingLinkMutation.isPending}
-              isOwner={isOwner}
+              userRole={user?.role}
             />
           </CardContent>
         </Card>
 
         {/* Yellow Warning Alert for Stripe Configuration */}
-        {isOwner && stripeStatus && !stripeStatus.onboarding_complete && (
+        {stripeStatus && !stripeStatus.onboarding_complete && (
           <Alert className="mt-6 border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20">
             <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
             <AlertDescription className="text-yellow-800 dark:text-yellow-200">
@@ -399,7 +387,9 @@ export default function Profile() {
                 <div className="flex-1">
                   <strong className="font-semibold">Configuration Stripe requise</strong>
                   <p className="text-sm mt-1">
-                    Vous devez configurer votre compte Stripe pour recevoir les paiements de location.
+                    {isOwner 
+                      ? 'Vous devez configurer votre compte Stripe pour recevoir les paiements de location.'
+                      : 'Vous devez configurer votre compte Stripe pour effectuer les paiements (dépôts, loyers, etc.).'}
                   </p>
                 </div>
                 <Button 
@@ -673,46 +663,36 @@ function StripeConfiguration({
   stripeStatus, 
   onSetup, 
   isLoading,
-  isOwner
+  userRole
 }: { 
   stripeStatus: StripeAccountStatus | undefined; 
   onSetup: () => void; 
   isLoading: boolean;
-  isOwner: boolean;
+  userRole?: string;
 }) {
   const { t } = useLanguage();
   const isConfigured = stripeStatus?.onboarding_complete;
   const hasAccount = stripeStatus?.has_account;
+  const isOwner = userRole === 'owner';
+  const isStudent = userRole === 'student';
 
-  // If not owner, show info message
-  if (!isOwner) {
-    return (
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Configuration Stripe</CardTitle>
-              <CardDescription>
-                Configuration Stripe disponible uniquement pour les propriétaires
-              </CardDescription>
-            </div>
-            <Badge variant="outline" className="gap-1">
-              Non applicable
-            </Badge>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <Alert>
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              La configuration Stripe est uniquement disponible pour les comptes propriétaires. 
-              Si vous souhaitez devenir propriétaire, veuillez créer un compte propriétaire.
-            </AlertDescription>
-          </Alert>
-        </CardContent>
-      </Card>
-    );
-  }
+  const getDescription = () => {
+    if (isOwner) {
+      return 'Configurez votre compte Stripe pour recevoir les paiements de location';
+    } else if (isStudent) {
+      return 'Configurez votre compte Stripe pour effectuer les paiements (dépôts, loyers, etc.)';
+    }
+    return 'Configurez votre compte Stripe pour les paiements';
+  };
+
+  const getConfigRequiredMessage = () => {
+    if (isOwner) {
+      return 'Vous devez configurer votre compte Stripe pour recevoir les paiements de location.';
+    } else if (isStudent) {
+      return 'Vous devez configurer votre compte Stripe pour effectuer les paiements (dépôts de garantie, loyers, etc.).';
+    }
+    return 'Vous devez configurer votre compte Stripe pour les paiements.';
+  };
 
   return (
     <Card>
@@ -721,7 +701,7 @@ function StripeConfiguration({
           <div>
             <CardTitle>Configuration Stripe</CardTitle>
             <CardDescription>
-              Configurez votre compte Stripe pour recevoir les paiements de location
+              {getDescription()}
             </CardDescription>
           </div>
           {isConfigured ? (
@@ -742,8 +722,10 @@ function StripeConfiguration({
           <Alert>
             <CheckCircle2 className="h-4 w-4" />
             <AlertDescription>
-              Votre compte Stripe est configuré et prêt à recevoir les paiements.
-              {stripeStatus?.payouts_enabled && stripeStatus?.charges_enabled && (
+              {isOwner 
+                ? 'Votre compte Stripe est configuré et prêt à recevoir les paiements.'
+                : 'Votre compte Stripe est configuré et prêt à effectuer les paiements.'}
+              {isOwner && stripeStatus?.payouts_enabled && stripeStatus?.charges_enabled && (
                 <span className="block mt-1 text-sm">
                   Les paiements et les virements sont activés.
                 </span>
@@ -757,7 +739,7 @@ function StripeConfiguration({
               <AlertDescription className="text-yellow-800 dark:text-yellow-200">
                 <strong>Configuration requise</strong>
                 <p className="text-sm mt-1">
-                  Vous devez configurer votre compte Stripe pour recevoir les paiements de location.
+                  {getConfigRequiredMessage()}
                 </p>
               </AlertDescription>
             </Alert>

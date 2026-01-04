@@ -41,15 +41,24 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
     retry: 1,
   });
 
-  // Query Stripe status for owners only
+  // Query Stripe status for all authenticated users (owners and students)
   const { data: stripeStatus } = useQuery<StripeAccountStatus>({
     queryKey: ['/contracts/connect/account-status'],
     queryFn: async () => {
-      return apiRequest<StripeAccountStatus>('GET', '/contracts/connect/account-status');
+      try {
+        return await apiRequest<StripeAccountStatus>('GET', '/contracts/connect/account-status');
+      } catch (error: any) {
+        // If API returns error, return null instead of throwing
+        if (error?.status === 403 || error?.status === 404) {
+          return null;
+        }
+        throw error;
+      }
     },
-    enabled: isAuthenticated && isOwner,
+    enabled: isAuthenticated,
     staleTime: 1000 * 60 * 10,
     gcTime: 1000 * 60 * 30,
+    retry: false,
   });
 
   // Stripe setup mutations
@@ -70,8 +79,14 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
     onError: (error: any) => {
       if (error?.requires_account_creation) {
         toast({
-          title: 'Account Required',
-          description: 'Please create a Stripe account first.',
+          title: 'Compte requis',
+          description: 'Veuillez d\'abord créer un compte Stripe.',
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: 'Erreur',
+          description: error?.message || 'Échec de la configuration Stripe.',
           variant: 'destructive',
         });
       }
@@ -92,8 +107,8 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
   // Check if KYC is not approved
   const kycNotApproved = kycStatus && kycStatus.status !== 'approved';
   
-  // Check if Stripe is not configured (only show if KYC is approved)
-  const stripeNotConfigured = isOwner && kycStatus?.status === 'approved' && stripeStatus && !stripeStatus.onboarding_complete;
+  // Check if Stripe is not configured (show for owners and students if KYC is approved)
+  const stripeNotConfigured = (isOwner || isStudent) && kycStatus?.status === 'approved' && stripeStatus && !stripeStatus.onboarding_complete;
 
   // Utiliser la fonction helper pour gérer les utilisateurs supprimés
 
@@ -389,7 +404,9 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
                       <div className="flex-1">
                         <strong className="font-semibold">Configuration Stripe requise</strong>
                         <p className="text-sm mt-1">
-                          Vous devez configurer votre compte Stripe pour recevoir les paiements de location.
+                          {isOwner 
+                            ? 'Vous devez configurer votre compte Stripe pour recevoir les paiements de location.'
+                            : 'Vous devez configurer votre compte Stripe pour effectuer les paiements (dépôts, loyers, etc.).'}
                         </p>
                       </div>
                       <Button 

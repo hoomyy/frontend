@@ -113,29 +113,65 @@
          =========================================== -->
     <title>Hoomy - Logement étudiant en Suisse | Zurich, Genève, Lausanne</title>
     <meta name="description" content="Trouvez votre logement étudiant idéal en Suisse. Parcourez des propriétés vérifiées à Zurich, Genève, Lausanne, Berne et plus. Locations sécurisées avec des propriétaires de confiance." />
-    <meta name="keywords" content="logement étudiant, Suisse, Zurich, Genève, Lausanne, location appartement, colocation, studio étudiant" />
+    <meta name="keywords" content="logement étudiant, Suisse, Zurich, Genève, Lausanne, Berne, Bâle, Lugano, location appartement, colocation, studio étudiant, logement universitaire, appartement étudiant, location Suisse, hébergement étudiant" />
     <meta name="author" content="Hoomy" />
-    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+    <meta name="googlebot" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+    <meta name="bingbot" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
     <link rel="canonical" href="https://hoomy.site/" />
+    <link rel="sitemap" type="application/xml" href="/sitemap.xml" />
+    
+    <!-- Hreflang pour internationalisation - Toutes les langues supportées -->
+    <link rel="alternate" hreflang="fr" href="https://hoomy.site/" />
+    <link rel="alternate" hreflang="fr-CH" href="https://hoomy.site/" />
+    <link rel="alternate" hreflang="en" href="https://hoomy.site/?lang=en" />
+    <link rel="alternate" hreflang="it" href="https://hoomy.site/?lang=it" />
+    <link rel="alternate" hreflang="de-CH" href="https://hoomy.site/?lang=de-ch" />
+    <link rel="alternate" hreflang="de" href="https://hoomy.site/?lang=de-ch" />
+    <link rel="alternate" hreflang="x-default" href="https://hoomy.site/" />
+    
+    <!-- Géolocalisation -->
+    <meta name="geo.region" content="CH" />
+    <meta name="geo.placename" content="Suisse" />
+    <meta name="ICBM" content="46.8182, 8.2275" />
+    
+    <!-- Métadonnées supplémentaires -->
+    <meta name="language" content="French" />
+    <meta name="revisit-after" content="1 days" />
+    <meta name="distribution" content="global" />
+    <meta name="rating" content="general" />
+    <meta name="coverage" content="worldwide" />
+    <meta name="target" content="all" />
+    <meta name="audience" content="students, university students, property owners" />
     
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://hoomy.site/" />
-    <meta property="og:title" content="Hoomy - Logement étudiant en Suisse" />
-    <meta property="og:description" content="Trouvez votre logement étudiant idéal en Suisse. Propriétés vérifiées à Zurich, Genève, Lausanne et plus." />
+    <meta property="og:title" content="Hoomy - Logement étudiant en Suisse | Zurich, Genève, Lausanne" />
+    <meta property="og:description" content="Trouvez votre logement étudiant idéal en Suisse. Parcourez des propriétés vérifiées à Zurich, Genève, Lausanne, Berne et plus. Locations sécurisées avec des propriétaires de confiance." />
     <meta property="og:image" content="https://hoomy.site/images/zurich.webp" />
+    <meta property="og:image:secure_url" content="https://hoomy.site/images/zurich.webp" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Hoomy - Logement étudiant en Suisse" />
+    <meta property="og:image:type" content="image/webp" />
     <meta property="og:locale" content="fr_CH" />
     <meta property="og:locale:alternate" content="de_CH" />
     <meta property="og:site_name" content="Hoomy" />
+    <meta property="og:determiner" content="the" />
+    <meta property="article:author" content="Hoomy" />
+    <meta property="article:publisher" content="https://hoomy.site" />
     
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:url" content="https://hoomy.site/" />
-    <meta name="twitter:title" content="Hoomy - Logement étudiant en Suisse" />
-    <meta name="twitter:description" content="Trouvez votre logement étudiant idéal en Suisse. Propriétés vérifiées à Zurich, Genève, Lausanne et plus." />
+    <meta name="twitter:title" content="Hoomy - Logement étudiant en Suisse | Zurich, Genève, Lausanne" />
+    <meta name="twitter:description" content="Trouvez votre logement étudiant idéal en Suisse. Parcourez des propriétés vérifiées à Zurich, Genève, Lausanne, Berne et plus." />
     <meta name="twitter:image" content="https://hoomy.site/images/zurich.webp" />
+    <meta name="twitter:image:alt" content="Hoomy - Logement étudiant en Suisse" />
+    <meta name="twitter:site" content="@hoomy" />
+    <meta name="twitter:creator" content="@hoomy" />
+    <meta name="twitter:domain" content="hoomy.site" />
     
     <!-- Theme color for browsers -->
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
@@ -150,6 +186,8 @@
       "name": "Hoomy",
       "description": "Plateforme de logement étudiant en Suisse",
       "url": "https://hoomy.site",
+      "logo": "https://hoomy.site/logo.svg",
+      "image": "https://hoomy.site/logo.svg",
       "applicationCategory": "Real Estate",
       "operatingSystem": "Web",
       "offers": {
@@ -161,6 +199,92 @@
         "@type": "Country",
         "name": "Switzerland"
       }
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "Hoomy",
+      "legalName": "Hoomy",
+      "url": "https://hoomy.site",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://hoomy.site/logo.svg",
+        "width": 500,
+        "height": 500
+      },
+      "image": "https://hoomy.site/logo.svg",
+      "description": "Plateforme de logement étudiant en Suisse. Trouvez votre logement étudiant idéal à Zurich, Genève, Lausanne, Berne et plus.",
+      "foundingDate": "2025",
+      "foundingLocation": {
+        "@type": "Place",
+        "address": {
+          "@type": "PostalAddress",
+          "addressCountry": "CH"
+        }
+      },
+      "areaServed": {
+        "@type": "Country",
+        "name": "Switzerland"
+      },
+      "knowsAbout": [
+        "Logement étudiant",
+        "Location immobilière",
+        "Colocation",
+        "Appartement étudiant",
+        "Immobilier Suisse"
+      ],
+      "sameAs": []
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "Hoomy",
+      "alternateName": "Hoomy - Logement étudiant en Suisse",
+      "url": "https://hoomy.site",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://hoomy.site/logo.svg",
+        "width": 500,
+        "height": 500
+      },
+      "description": "Trouvez votre logement étudiant idéal en Suisse. Parcourez des propriétés vérifiées à Zurich, Genève, Lausanne, Berne et plus.",
+      "inLanguage": ["fr", "fr-CH", "en", "it", "de-CH", "de"],
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": {
+          "@type": "EntryPoint",
+          "urlTemplate": "https://hoomy.site/properties?search={search_term_string}"
+        },
+        "query-input": "required name=search_term_string"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Hoomy",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://hoomy.site/logo.svg"
+        }
+      }
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "RealEstateAgent",
+      "name": "Hoomy",
+      "url": "https://hoomy.site",
+      "logo": "https://hoomy.site/logo.svg",
+      "description": "Plateforme de logement étudiant en Suisse",
+      "areaServed": {
+        "@type": "Country",
+        "name": "Switzerland"
+      },
+      "serviceType": "Student Housing Rental",
+      "priceRange": "$$"
     }
     </script>
     <script type="module" crossorigin src="/assets/js/index-iWuRHTV7.js"></script>

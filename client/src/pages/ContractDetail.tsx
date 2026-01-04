@@ -60,13 +60,13 @@ export default function ContractDetail() {
       
       if (type === 'deposit') {
         toast({
-          title: 'Deposit Payment Successful',
-          description: 'Your security deposit has been successfully processed.',
+          title: 'Paiement de la caution réussi',
+          description: 'Votre caution a été traitée avec succès.',
         });
       } else {
         toast({
-          title: 'Payment Setup Successful',
-          description: 'Your subscription has been set up successfully. Monthly payments will be processed automatically.',
+          title: 'Configuration du paiement réussie',
+          description: 'Votre abonnement a été configuré avec succès. Les paiements mensuels seront traités automatiquement.',
         });
       }
       
@@ -74,8 +74,8 @@ export default function ContractDetail() {
       window.history.replaceState({}, '', window.location.pathname);
     } else if (payment === 'cancelled') {
       toast({
-        title: 'Payment Cancelled',
-        description: 'The payment was cancelled. You can try again anytime.',
+        title: 'Paiement annulé',
+        description: 'Le paiement a été annulé. Vous pouvez réessayer à tout moment.',
         variant: 'destructive',
       });
       
@@ -164,35 +164,59 @@ export default function ContractDetail() {
     await signContractMutation.mutateAsync(signatureData);
   };
 
+  // Activate Formula B subscription (monthly 4% payment)
   const createSubscriptionMutation = useMutation({
-    mutationFn: () => apiRequest<{ success: boolean; checkout_url: string; requires_owner_setup?: boolean }>('POST', '/contracts/create-subscription', { contract_id: contractId }),
+    mutationFn: () => {
+      if (!contractId) throw new Error('ID de contrat requis');
+      // Try new endpoint first, fallback to old one for backward compatibility
+      return apiRequest<{ success: boolean; checkout_url?: string; subscription_id?: string; requires_owner_setup?: boolean }>(
+        'POST', 
+        '/payments/activate-formula-b', 
+        { contract_id: contractId }
+      ).catch(() => {
+        // Fallback to old endpoint if new one doesn't exist yet
+        return apiRequest<{ success: boolean; checkout_url: string; requires_owner_setup?: boolean }>(
+          'POST', 
+          '/contracts/create-subscription', 
+          { contract_id: contractId }
+        );
+      });
+    },
     onSuccess: (data) => {
       if (data.requires_owner_setup) {
         toast({ 
-          title: 'Owner Setup Required', 
-          description: 'The property owner must complete their Stripe setup before payments can be processed.',
+          title: 'Configuration requise', 
+          description: 'Vous devez compléter la configuration Stripe avant de pouvoir activer l\'abonnement.',
           variant: 'destructive' 
         });
         return;
       }
       if (data.checkout_url) {
         toast({ 
-          title: 'Redirecting to Stripe', 
-          description: 'You will be redirected to complete your payment setup.' 
+          title: 'Redirection vers Stripe', 
+          description: 'Vous allez être redirigé pour compléter la configuration du paiement.' 
         });
-        safeRedirect(data.checkout_url, '/contracts');
+        safeRedirect(data.checkout_url, `/contracts/${contractId}`);
+      } else if (data.subscription_id) {
+        // Subscription created successfully without redirect
+        queryClient.invalidateQueries({ queryKey: ['/contracts', contractId] });
+        queryClient.invalidateQueries({ queryKey: ['/payments/contract', contractId] });
+        toast({
+          title: 'Succès',
+          description: 'Abonnement activé avec succès. Les paiements seront effectués automatiquement chaque mois.',
+        });
       } else {
         toast({ 
-          title: 'Error', 
-          description: 'No checkout URL received from server.',
+          title: 'Erreur', 
+          description: 'Aucune réponse valide reçue du serveur.',
           variant: 'destructive' 
         });
       }
     },
     onError: (error: Error) => {
-      const errorMessage = error.message || 'Failed to create subscription. Please try again.';
+      const errorMessage = error.message || 'Échec de l\'activation de l\'abonnement. Veuillez réessayer.';
       toast({ 
-        title: 'Payment Setup Error', 
+        title: 'Erreur d\'activation', 
         description: errorMessage, 
         variant: 'destructive' 
       });
@@ -200,53 +224,59 @@ export default function ContractDetail() {
   });
 
   const cancelSubscriptionMutation = useMutation({
-    mutationFn: () => apiRequest('POST', '/contracts/cancel-subscription', { contract_id: contractId }),
+    mutationFn: () => {
+      if (!contractId) throw new Error('ID de contrat requis');
+      return apiRequest('POST', '/contracts/cancel-subscription', { contract_id: contractId });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/contracts', contractId] });
       queryClient.invalidateQueries({ queryKey: ['/contracts/payments', contractId] });
       toast({ 
-        title: 'Subscription Cancelled', 
-        description: 'Your subscription has been cancelled. Automatic payments will stop.' 
+        title: 'Abonnement annulé', 
+        description: 'Votre abonnement a été annulé. Les paiements automatiques s\'arrêteront.' 
       });
     },
     onError: (error: Error) => {
       toast({ 
-        title: 'Cancellation Error', 
-        description: error.message || 'Failed to cancel subscription. Please try again.',
+        title: 'Erreur d\'annulation', 
+        description: error.message || 'Échec de l\'annulation de l\'abonnement. Veuillez réessayer.',
         variant: 'destructive' 
       });
     },
   });
 
   const payDepositMutation = useMutation({
-    mutationFn: () => apiRequest<{ success: boolean; checkout_url: string; requires_owner_setup?: boolean }>('POST', '/contracts/pay-deposit', { contract_id: contractId }),
+    mutationFn: () => {
+      if (!contractId) throw new Error('ID de contrat requis');
+      return apiRequest<{ success: boolean; checkout_url: string; requires_owner_setup?: boolean }>('POST', '/contracts/pay-deposit', { contract_id: contractId });
+    },
     onSuccess: (data) => {
       if (data.requires_owner_setup) {
         toast({ 
-          title: 'Owner Setup Required', 
-          description: 'The property owner must complete their Stripe setup before payments can be processed.',
+          title: 'Configuration requise', 
+          description: 'Le propriétaire doit compléter la configuration Stripe avant que les paiements puissent être traités.',
           variant: 'destructive' 
         });
         return;
       }
       if (data.checkout_url) {
         toast({ 
-          title: 'Redirecting to Stripe', 
-          description: 'You will be redirected to complete your deposit payment.' 
+          title: 'Redirection vers Stripe', 
+          description: 'Vous allez être redirigé pour compléter le paiement de la caution.' 
         });
         safeRedirect(data.checkout_url, '/contracts');
       } else {
         toast({ 
-          title: 'Error', 
-          description: 'No checkout URL received from server.',
+          title: 'Erreur', 
+          description: 'Aucune URL de paiement reçue du serveur.',
           variant: 'destructive' 
         });
       }
     },
     onError: (error: Error) => {
-      const errorMessage = error.message || 'Failed to process deposit payment. Please try again.';
+      const errorMessage = error.message || 'Échec du traitement du paiement de la caution. Veuillez réessayer.';
       toast({ 
-        title: 'Payment Error', 
+        title: 'Erreur de paiement', 
         description: errorMessage, 
         variant: 'destructive' 
       });
@@ -264,7 +294,10 @@ export default function ContractDetail() {
 
   // Process Formula A payment (one-time 800 CHF)
   const processFormulaAPaymentMutation = useMutation({
-    mutationFn: () => apiRequest<{ success: boolean; checkout_url?: string; payment_intent_id?: string }>('POST', '/payments/process-formula-a', { contract_id: contractId }),
+    mutationFn: () => {
+      if (!contractId) throw new Error('ID de contrat requis');
+      return apiRequest<{ success: boolean; checkout_url?: string; payment_intent_id?: string }>('POST', '/payments/process-formula-a', { contract_id: contractId });
+    },
     onSuccess: (data) => {
       if (data.checkout_url) {
         toast({
@@ -292,7 +325,10 @@ export default function ContractDetail() {
 
   // Retry failed payment
   const retryPaymentMutation = useMutation({
-    mutationFn: (paymentId: number) => apiRequest('POST', `/payments/retry/${paymentId}`),
+    mutationFn: (paymentId: number) => {
+      if (!contractId) throw new Error('ID de contrat requis');
+      return apiRequest('POST', `/payments/retry/${paymentId}`);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/payments/contract', contractId] });
       queryClient.invalidateQueries({ queryKey: ['/contracts', contractId] });
@@ -311,13 +347,45 @@ export default function ContractDetail() {
   });
 
   // Upload departure proof
-  const handleDepartureProofUpload = (url: string) => {
+  const handleDepartureProofUpload = async (url: string) => {
+    // Calculate billing_stopped_at (departure_date + 30 days)
+    // The backend should handle this, but we can also set it here if needed
     queryClient.invalidateQueries({ queryKey: ['/contracts', contractId] });
     toast({
       title: 'Succès',
-      description: 'Preuve de départ uploadée. La facturation s\'arrêtera dans 30 jours.',
+      description: 'Preuve de départ uploadée. La facturation s\'arrêtera automatiquement 30 jours après la date de départ.',
     });
   };
+
+  // Handle departure date update
+  const updateDepartureDateMutation = useMutation({
+    mutationFn: (departureDate: string) => {
+      if (!contractId) throw new Error('ID de contrat requis');
+      // Calculate billing_stopped_at: departure_date + 30 days
+      const departure = new Date(departureDate);
+      const billingStopped = new Date(departure);
+      billingStopped.setDate(billingStopped.getDate() + 30);
+      
+      return apiRequest('PUT', `/contracts/${contractId}`, {
+        departure_date: departureDate,
+        billing_stopped_at: billingStopped.toISOString(),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/contracts', contractId] });
+      toast({
+        title: 'Succès',
+        description: 'Date de départ enregistrée. La facturation s\'arrêtera automatiquement 30 jours après cette date.',
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Erreur',
+        description: error.message || 'Échec de la mise à jour de la date de départ',
+        variant: 'destructive',
+      });
+    },
+  });
 
   const handleDownloadPDF = async () => {
     if (!contractId) {
@@ -974,33 +1042,78 @@ export default function ContractDetail() {
                           </Card>
 
                           {/* Student Departure Proof */}
-                          {contract.status === 'active' && (
+                          {contract.status === 'active' && contract.payment_formula === 'B' && (
                             <Card>
                               <CardHeader>
-                                <CardTitle className="text-base">Preuve de départ de l'étudiant</CardTitle>
+                                <CardTitle className="text-base">Gestion du départ étudiant</CardTitle>
                                 <CardDescription>
-                                  Upload du PDF ou document signé prouvant le départ. La facturation s'arrêtera 30 jours après validation.
+                                  Upload du PDF ou document signé prouvant le départ. La facturation s'arrêtera automatiquement 30 jours après la date de départ.
                                 </CardDescription>
                               </CardHeader>
-                              <CardContent>
+                              <CardContent className="space-y-4">
+                                {!contract.departure_date && (
+                                  <div className="space-y-2">
+                                    <Label htmlFor="departure_date">Date de départ de l'étudiant</Label>
+                                    <div className="flex gap-2">
+                                      <Input
+                                        id="departure_date"
+                                        type="date"
+                                        onChange={(e) => {
+                                          if (e.target.value) {
+                                            updateDepartureDateMutation.mutate(e.target.value);
+                                          }
+                                        }}
+                                        disabled={updateDepartureDateMutation.isPending}
+                                        className="flex-1"
+                                      />
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">
+                                      La facturation s'arrêtera automatiquement 30 jours après cette date.
+                                    </p>
+                                  </div>
+                                )}
+                                
                                 <DocumentUpload
                                   contractId={contractId!}
                                   documentType="student_departure"
                                   existingUrl={contract.student_departure_proof_url}
                                   onUploadSuccess={handleDepartureProofUpload}
                                 />
+                                
                                 {contract.departure_date && (
                                   <Alert className="mt-4">
                                     <Info className="h-4 w-4" />
                                     <AlertDescription>
-                                      <p className="text-sm">
-                                        Date de départ: {new Date(contract.departure_date).toLocaleDateString('fr-CH')}
-                                        {contract.billing_stopped_at && (
-                                          <span className="block mt-1">
-                                            Facturation arrêtée le: {new Date(contract.billing_stopped_at).toLocaleDateString('fr-CH')}
-                                          </span>
+                                      <div className="space-y-1">
+                                        <p className="text-sm font-medium">
+                                          Date de départ: {new Date(contract.departure_date).toLocaleDateString('fr-CH', {
+                                            day: 'numeric',
+                                            month: 'long',
+                                            year: 'numeric'
+                                          })}
+                                        </p>
+                                        {contract.billing_stopped_at ? (
+                                          <p className="text-sm">
+                                            Facturation arrêtée le: {new Date(contract.billing_stopped_at).toLocaleDateString('fr-CH', {
+                                              day: 'numeric',
+                                              month: 'long',
+                                              year: 'numeric'
+                                            })}
+                                          </p>
+                                        ) : (
+                                          <p className="text-sm text-muted-foreground">
+                                            La facturation s'arrêtera le: {(() => {
+                                              const departure = new Date(contract.departure_date);
+                                              departure.setDate(departure.getDate() + 30);
+                                              return departure.toLocaleDateString('fr-CH', {
+                                                day: 'numeric',
+                                                month: 'long',
+                                                year: 'numeric'
+                                              });
+                                            })()}
+                                          </p>
                                         )}
-                                      </p>
+                                      </div>
                                     </AlertDescription>
                                   </Alert>
                                 )}

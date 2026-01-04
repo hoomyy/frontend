@@ -1,0 +1,51 @@
+# robots.txt pour Hoomy - Logement étudiant en Suisse
+# https://hoomy.site
+
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+Disallow: /dashboard/
+Disallow: /profile
+Disallow: /messages
+Disallow: /contracts/
+Disallow: /requests
+Disallow: /favorites
+Disallow: /my-properties
+Disallow: /properties/create
+Disallow: /properties/*/edit
+Disallow: /contracts/create/
+
+# Autoriser les pages publiques importantes
+Allow: /properties
+Allow: /properties/
+Allow: /about
+Allow: /cgu
+Allow: /privacy
+
+# Sitemap
+Sitemap: https://hoomy.site/sitemap.xml
+
+# Crawl-delay pour éviter la surcharge
+Crawl-delay: 1
+
+# Spécifique pour Googlebot
+User-agent: Googlebot
+Allow: /
+Crawl-delay: 0
+
+# Spécifique pour Bingbot
+User-agent: Bingbot
+Allow: /
+Crawl-delay: 1
+
+# Bloquer les bots malveillants
+User-agent: AhrefsBot
+Disallow: /
+
+User-agent: SemrushBot
+Disallow: /
+
+User-agent: DotBot
+Disallow: /
+

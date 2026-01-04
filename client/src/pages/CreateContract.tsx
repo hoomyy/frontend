@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useLocation, Link, useParams } from 'wouter';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowLeft, FileText, CreditCard, Info } from 'lucide-react';
+import { ArrowLeft, FileText, CreditCard, Info, AlertCircle } from 'lucide-react';
 import { MainLayout } from '@/components/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +18,7 @@ import { createContractSchema, type CreateContractInput, type PaymentMethod } fr
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { queryClient } from '@/lib/queryClient';
 import { apiRequest } from '@/lib/api';
+import { getAPIBaseURL } from '@/lib/apiConfig';
 import type { Property, User } from '@shared/schema';
 import { PaymentMethodManager } from '@/components/PaymentMethodManager';
 import { useToast } from '@/hooks/use-toast';
@@ -97,55 +98,77 @@ export default function CreateContract() {
   }, [paymentMethods]);
 
   // Calculate commission based on formula
-  const monthlyRent = form.watch('monthly_rent') || 0;
-  const charges = form.watch('charges') || 0;
+  const monthlyRent = Number(form.watch('monthly_rent')) || 0;
+  const charges = Number(form.watch('charges')) || 0;
   const paymentFormula = form.watch('payment_formula') || 'A';
   const totalRent = monthlyRent + charges;
   
   const commissionAmount = paymentFormula === 'A' 
     ? 800 // Formule A: 800 CHF fixe
-    : Math.round(totalRent * 0.04 * 100) / 100; // Formule B: 4% du loyer mensuel charges comprises
+    : totalRent > 0 
+      ? Math.round(totalRent * 0.04 * 100) / 100 // Formule B: 4% du loyer mensuel charges comprises
+      : 0; // Fallback to 0 if totalRent is invalid
 
   const createContractMutation = useMutation({
     mutationFn: async (data: CreateContractInput & { payment_formula: 'A' | 'B' }) => {
-      // First upload PDF if provided
-      let leaseProofUrl: string | null = null;
-      if (leaseProofFile) {
-        // Upload PDF file using FormData
-        const formData = new FormData();
-        formData.append('file', leaseProofFile);
-        formData.append('type', 'lease_signature');
-        formData.append('contract_id', '0'); // Will be updated after contract creation
-        
-        const token = localStorage.getItem('auth_token');
-        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'https://backend.hoomy.site'}/documents/upload`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-          body: formData,
-        });
-        
-        if (!response.ok) {
-          throw new Error('Échec de l\'upload du PDF');
-        }
-        
-        const uploadResponse = await response.json();
-        leaseProofUrl = uploadResponse.url;
-      }
-
-      // Create contract with payment info
+      // Create contract first (without PDF URL, will be uploaded after)
       const contractData = {
         ...data,
-        lease_signature_proof_url: leaseProofUrl,
+        commission_amount: commissionAmount, // Include calculated commission amount
       };
 
-      return apiRequest<{ success: boolean; contract: { id: number } }>('POST', '/contracts/create', contractData);
+      const result = await apiRequest<{ success: boolean; contract: { id: number } }>('POST', '/contracts/create', contractData);
+      
+      // Then upload PDF if provided (now we have the real contract_id)
+      if (leaseProofFile && result.contract?.id) {
+        try {
+          const formData = new FormData();
+          formData.append('file', leaseProofFile);
+          formData.append('type', 'lease_signature');
+          formData.append('contract_id', result.contract.id.toString());
+          
+          const token = localStorage.getItem('auth_token');
+          const apiBase = getAPIBaseURL();
+          const baseClean = apiBase.replace(/\/+$/, '');
+          const uploadUrl = `${baseClean}/documents/upload`;
+          
+          const response = await fetch(uploadUrl, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+            body: formData,
+          });
+          
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: 'Échec de l\'upload du PDF' }));
+            throw new Error(errorData.error || 'Échec de l\'upload du PDF');
+          }
+          
+          // Update contract with PDF URL
+          const uploadResponse = await response.json();
+          if (uploadResponse.url) {
+            await apiRequest('PUT', `/contracts/${result.contract.id}/upload-lease-proof`, {
+              lease_signature_proof_url: uploadResponse.url,
+            });
+          }
+        } catch (uploadError) {
+          // Log error but don't fail contract creation
+          console.error('PDF upload error:', uploadError);
+          toast({
+            title: 'Avertissement',
+            description: 'Le contrat a été créé mais l\'upload du PDF a échoué. Vous pourrez l\'uploader depuis la page du contrat.',
+            variant: 'destructive',
+          });
+        }
+      }
+
+      return result;
     },
     onSuccess: (data) => {
       toast({
         title: 'Succès',
-        description: 'Contrat créé avec succès. Vous pouvez maintenant uploader la preuve de signature si ce n\'est pas déjà fait.',
+        description: 'Contrat créé avec succès.',
       });
       setLocation(`/contracts/${data.contract.id}`);
     },
@@ -442,6 +465,11 @@ export default function CreateContract() {
                           <div>
                             Montant mensuel: <strong>{commissionAmount.toFixed(2)} CHF</strong> 
                             {' '}(4% de {totalRent.toFixed(2)} CHF = loyer {monthlyRent.toFixed(2)} CHF + charges {charges.toFixed(2)} CHF)
+                            {totalRent === 0 && (
+                              <span className="block text-xs text-muted-foreground mt-1">
+                                Veuillez renseigner le loyer et les charges pour calculer la commission.
+                              </span>
+                            )}
                           </div>
                         )}
                       </AlertDescription>
