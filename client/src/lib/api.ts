@@ -252,7 +252,16 @@ export async function apiRequest<T = any>(
           }
           throw badRequestError;
         case 404:
-          const notFoundError = new Error(errorMessage || 'La ressource demandée n\'existe pas.');
+          // Améliorer les messages d'erreur pour les routes de paiement
+          let notFoundMessage = errorMessage || 'La ressource demandée n\'existe pas.';
+          if (endpoint.includes('payment-methods') || endpoint.includes('payments') || endpoint.includes('invoices')) {
+            if (errorMessage && errorMessage.includes('Route') && errorMessage.includes('trouvée')) {
+              notFoundMessage = 'Cette fonctionnalité de paiement n\'est pas encore disponible. Veuillez contacter le support.';
+            } else if (!errorMessage || errorMessage === 'Route non trouvée') {
+              notFoundMessage = 'Cette fonctionnalité de paiement n\'est pas encore disponible. Veuillez contacter le support.';
+            }
+          }
+          const notFoundError = new Error(notFoundMessage);
           if (errorDetails) {
             (notFoundError as any).details = errorDetails;
           }
